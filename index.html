@@ -179,6 +179,8 @@
       RAW-DATA Upload
     </label>
     <input id="fileInput" type="file" accept=".csv" multiple>
+    <button type="button" id="resetDataBtn" class="upload-btn" style="display:none;">기본 데이터로 초기화</button>
+    <button type="button" id="downloadDataBtn" class="upload-btn">📤 data.json 다운로드 (GitHub 공유용)</button>
     <span class="upload-hint">어제자·오늘자가 합쳐진 CSV 1개, 또는 따로 된 CSV 2개 — 둘 다 올릴 수 있어요 (날짜를 보고 자동 구분)</span>
   </div>
   <div class="upload-msg" id="uploadMsg"></div>
@@ -674,12 +676,13 @@ fileInput.addEventListener('change', (e)=>{
       PAYLOAD.date_y = merged.date_y;
       PAYLOAD.date_t = merged.date_t;
       PAYLOAD.records = merged.records;
+      try{ localStorage.setItem('coupang_dashboard_payload', JSON.stringify(PAYLOAD)); }catch(e){}
       document.getElementById('dateLabel').innerHTML = PAYLOAD.date_t + '일자 (어제 '+PAYLOAD.date_y+' 대비)';
       searchInput.value=''; currentFilter=''; clearBtn.style.display='none';
       Object.keys(expandState).forEach(k=>delete expandState[k]);
       Object.keys(miniFilterText).forEach(k=>delete miniFilterText[k]);
       render();
-      showUploadMsg('업로드 완료 · 어제 '+PAYLOAD.date_y+' vs 오늘 '+PAYLOAD.date_t+' · '+merged.records.length+'개 SKU 반영됨', false);
+      showUploadMsg('업로드 완료 · 어제 '+PAYLOAD.date_y+' vs 오늘 '+PAYLOAD.date_t+' · '+merged.records.length+'개 SKU 반영됨. 다른 사람들도 보게 하려면 아래 "data.json 다운로드" 버튼을 눌러서 GitHub에 올려주세요.', false);
     } catch(err){
       showUploadMsg('파일을 읽는 중 오류가 발생했어요: ' + err.message, true);
     }
@@ -687,7 +690,65 @@ fileInput.addEventListener('change', (e)=>{
   });
 });
 
-render();
+// 새로고침해도 데이터가 유지되도록, 그리고 대표가 올린 data.json이 있으면 모두에게 그걸 보여주도록 처리한다.
+const resetDataBtn = document.getElementById('resetDataBtn');
+const downloadDataBtn = document.getElementById('downloadDataBtn');
+const DEFAULT_PAYLOAD = JSON.parse(JSON.stringify(PAYLOAD)); // 최초 baked-in 데이터를 따로 보관 (초기화용)
+
+function applyPayload(data, showResetBtn){
+  PAYLOAD.date_y = data.date_y;
+  PAYLOAD.date_t = data.date_t;
+  PAYLOAD.records = data.records;
+  document.getElementById('dateLabel').innerHTML = PAYLOAD.date_t + '일자 (어제 '+PAYLOAD.date_y+' 대비)';
+  resetDataBtn.style.display = showResetBtn ? 'flex' : 'none';
+}
+
+function loadFromLocalStorageIfAny(){
+  try{
+    const saved = localStorage.getItem('coupang_dashboard_payload');
+    if(saved){
+      const savedPayload = JSON.parse(saved);
+      if(savedPayload && savedPayload.records && savedPayload.records.length){
+        applyPayload(savedPayload, true);
+        return true;
+      }
+    }
+  }catch(e){}
+  return false;
+}
+
+// 우선순위: data.json(대표가 GitHub에 올려서 모두가 보는 공유 데이터) → 없으면 내 브라우저에 저장된 개인 업로드 → 둘 다 없으면 기본 내장 데이터
+fetch('data.json', {cache:'no-store'})
+  .then(r => r.ok ? r.json() : Promise.reject())
+  .then(data=>{
+    if(data && data.records && data.records.length){
+      applyPayload(data, false);
+    } else {
+      loadFromLocalStorageIfAny();
+    }
+  })
+  .catch(()=>{ loadFromLocalStorageIfAny(); })
+  .finally(()=>{ render(); });
+
+resetDataBtn.addEventListener('click', ()=>{
+  try{ localStorage.removeItem('coupang_dashboard_payload'); }catch(e){}
+  applyPayload(DEFAULT_PAYLOAD, false);
+  searchInput.value=''; currentFilter=''; clearBtn.style.display='none';
+  Object.keys(expandState).forEach(k=>delete expandState[k]);
+  Object.keys(miniFilterText).forEach(k=>delete miniFilterText[k]);
+  render();
+  showUploadMsg('기본 데이터로 되돌렸어요.', false);
+});
+
+downloadDataBtn.addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify(PAYLOAD)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'data.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showUploadMsg('data.json을 다운로드했어요. GitHub 저장소에서 기존 data.json 파일을 이 파일로 덮어써서 업로드(Commit)하면, 이 링크로 들어오는 모두에게 자동 반영돼요.', false);
+});
 </script>
 </body>
 </html>
