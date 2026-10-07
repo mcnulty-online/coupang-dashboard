@@ -8,7 +8,7 @@
   - PO_SKU_LIST*.csv                         (발주 SKU 리스트)
 """
 import glob, json, os, sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import pandas as pd
 
 IN, OUT = sys.argv[1], sys.argv[2]
@@ -198,7 +198,7 @@ ops_off = days.index(ops_start)
 for k in skus:
     for f in OPSF + ['so']:
         k[f] = k[f][ops_off:]
-out = dict(opsOffset=ops_off, days=days, asOf=end, generated=datetime.now().strftime('%Y-%m-%d %H:%M'),
+out = dict(opsOffset=ops_off, days=days, asOf=end, generated=datetime.now(timezone(timedelta(hours=9))).strftime('%Y-%m-%d %H:%M'),
            files=dict(sales=[os.path.basename(f) for f in sfiles], ops=[os.path.basename(f) for f in ofiles],
                       po=[os.path.basename(f) for f in pfiles]),
            missingOps=missing_ops, opsStart=ops_start, skus=skus, poOnly=po_only, hist=hist)
