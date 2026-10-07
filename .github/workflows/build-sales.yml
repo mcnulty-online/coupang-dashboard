@@ -1,0 +1,49 @@
+# sales/input 폴더에 쿠팡 CSV를 올리면 대시보드(sales/index.html)를 다시 만들어 저장합니다.
+name: 쿠팡 판매·재고 대시보드 갱신
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'sales/input/**'
+      - 'sales/template.html'
+      - 'sales/scripts/**'
+  workflow_dispatch:   # Actions 탭에서 'Run workflow'로 수동 실행도 가능
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-sales
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 준비
+        run: pip install pandas
+
+      - name: 데이터 계산
+        run: python sales/scripts/build_data.py sales/input sales/data/data.b64 sales/data/history.csv.gz
+
+      - name: 페이지 만들기
+        run: python sales/scripts/render.py sales/template.html sales/data/data.b64 sales/index.html
+
+      - name: 저장
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sales/index.html sales/data/data.b64
+          if git diff --cached --quiet; then
+            echo "바뀐 내용 없음"
+          else
+            git commit -m "대시보드 자동 갱신 ($(date -u -d '+9 hours' '+%Y-%m-%d %H:%M') KST)"
+            git push
+          fi

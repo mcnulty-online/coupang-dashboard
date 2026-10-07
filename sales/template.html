@@ -1,0 +1,1323 @@
+<title>쿠팡 판매·재고 대시보드</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: sticky header (title + filters + tabs) over a single-column stack of panels; KPI row, then 2-up chart grid that collapses to one column on phones. */
+:root {
+  --bg: #f5f4f1;
+  --surface: #fdfcfa;
+  --ink: #1a1613;
+  --ink-2: #57514b;
+  --muted: #8a847c;
+  --grid: #e6e3dd;
+  --line: #d6d2ca;
+  --ring: rgba(26,22,19,0.09);
+  --accent: #145f50;        /* deep green: active tab, chips, headline card */
+  --accent-ink: #ffffff;
+  --accent-soft: #e4f0ec;
+  --serious-ink: #b4561f;
+  --mono: "IBM Plex Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;   /* 숫자도 본문 글꼴, 자릿수는 tabular-nums로 정렬 */
+  --s1: #2a78d6; --s1-soft: #9ec5f4; --s2: #eb6834; --s3: #1baf7a; --s7: #4a3aa7;
+  --good: #0ca30c; --warn: #fab219; --serious: #ec835a; --crit: #d03b3b; --idle: #b9b4ab;
+  --good-ink: #006300; --crit-ink: #b42f2f;
+  --font: "IBM Plex Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f0e0d; --surface: #1a1918; --ink: #f6f3ef; --ink-2: #c6bfb6; --muted: #8f897f;
+    --grid: #2b2926; --line: #3a3733; --ring: rgba(255,255,255,0.09);
+    --accent: #2f8f78; --accent-ink: #ffffff; --accent-soft: #1b2c27; --serious-ink: #f09a72;
+    --s1: #3987e5; --s1-soft: #1c5cab; --s2: #d95926; --s3: #199e70; --s7: #9085e9; --idle: #5d5952;
+    --good-ink: #2fbf2f; --crit-ink: #ef7474;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f0e0d; --surface: #1a1918; --ink: #f6f3ef; --ink-2: #c6bfb6; --muted: #8f897f;
+  --grid: #2b2926; --line: #3a3733; --ring: rgba(255,255,255,0.09);
+  --accent: #2f8f78; --accent-ink: #ffffff; --accent-soft: #1b2c27; --serious-ink: #f09a72;
+  --s1: #3987e5; --s1-soft: #1c5cab; --s2: #d95926; --s3: #199e70; --s7: #9085e9; --idle: #5d5952;
+  --good-ink: #2fbf2f; --crit-ink: #ef7474;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { font-variant-numeric: tabular-nums; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 14px; line-height: 1.5; }
+.wrap { max-width: 1280px; margin: 0 auto; padding-inline: 20px; padding-block: 0 48px; }
+header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); border-bottom: 1px solid var(--line); }
+.top-inner { max-width: 1280px; margin: 0 auto; padding-inline: 20px; padding-block: 16px 0; display: grid; gap: 12px; }
+.title-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+.period { color: var(--ink-2); font-size: 13px; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.flabel { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); padding: 4px 12px; border-radius: 999px; cursor: pointer; }
+.chip:hover { border-color: var(--accent); color: var(--ink); }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+select, input[type="search"] { font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; }
+:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+nav.tabs { display: flex; gap: 4px; overflow-x: auto; }
+.tab { font: inherit; font-size: 14px; font-weight: 600; background: none; border: 0; border-bottom: 3px solid transparent; color: var(--muted); padding: 8px 12px 9px; cursor: pointer; white-space: nowrap; }
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+
+section.view { display: grid; gap: 16px; padding-block: 20px 0; }
+.kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.kpi { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 14px 16px; display: grid; gap: 2px; align-content: start; }
+.kpi .lab { font-size: 12px; color: var(--ink-2); font-weight: 500; }
+.kpi .val { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.25; }
+.kpi .val small { font-size: 14px; font-weight: 600; color: var(--ink-2); margin-left: 2px; }
+.kpi .sub { font-size: 12px; color: var(--muted); }
+.kpi.flag { border-left: 4px solid var(--flag, transparent); }
+
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.grid-wide { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; }
+.panel { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 16px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.panel h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.panel .desc { margin: -6px 0 0; font-size: 12px; color: var(--muted); }
+.ph { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; }
+.chart { position: relative; height: 260px; }
+.chart.tall { height: 340px; }
+.chart.short { height: 180px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; background: var(--c); }
+
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 7px 8px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; font-variant-numeric: tabular-nums; }
+th { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: var(--muted); position: sticky; top: 0; background: var(--surface); }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--ink); }
+th[aria-sort="descending"]::after { content: " ▼"; }
+th[aria-sort="ascending"]::after { content: " ▲"; }
+td.l, th.l { text-align: left; }
+td.name { white-space: normal; min-width: 220px; max-width: 360px; color: var(--ink); }
+td.name .cat { display: block; font-size: 11px; color: var(--muted); }
+tbody tr.click { cursor: pointer; }
+tbody tr.click:hover td { background: var(--accent-soft); }
+tbody tr.sel td { background: var(--accent-soft); }
+.bar-cell { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.minibar { width: 70px; height: 6px; background: var(--grid); border-radius: 3px; overflow: hidden; }
+.minibar i { display: block; height: 100%; background: var(--s1); border-radius: 3px; }
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 1px 8px 1px 6px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink); background: var(--surface); }
+.pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--pc, var(--idle)); }
+.neg { color: var(--crit-ink); }
+.empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
+.note { font-size: 12px; color: var(--muted); }
+.detail-head { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; justify-content: space-between; }
+.detail-head h2 { font-size: 16px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px 16px; }
+.facts div { display: grid; }
+.facts b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.facts span { font-size: 11px; color: var(--muted); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.toolbar input { min-width: 0; flex: 1 1 220px; max-width: 360px; }
+
+.panel > * { min-width: 0; }
+.dgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; }
+.dchart { min-width: 0; display: grid; gap: 6px; }
+.dchart.wide { grid-column: 1 / -1; }
+.dlab { font-size: 13px; font-weight: 600; color: var(--ink); }
+.dlab span { font-weight: 400; font-size: 11px; color: var(--muted); margin-left: 6px; }
+details.daily { border-top: 1px solid var(--grid); padding-top: 10px; }
+details.daily summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--ink-2); padding: 4px 0; }
+details.daily summary:hover { color: var(--ink); }
+details.daily .tbl-wrap { margin-top: 8px; max-height: 420px; overflow: auto; }
+@media (max-width: 860px) { .dgrid { grid-template-columns: minmax(0, 1fr); } }
+.statusbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.chip.st { display: inline-flex; align-items: center; gap: 6px; }
+.chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.chip .cnt { font-family: var(--mono); font-size: 11px; padding: 0 6px; border-radius: 999px; background: var(--grid); color: var(--ink-2); }
+.chip[aria-pressed="true"] .cnt { background: rgba(255,255,255,0.22); color: inherit; }
+.cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.vcard { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 14px 16px; display: grid; gap: 2px; align-content: start; }
+.vcard .lab { font-size: 12px; color: var(--ink-2); font-weight: 500; }
+.vcard .val { font-family: var(--mono); font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+.vcard .val small { font-family: var(--font); font-size: 14px; margin-left: 4px; font-weight: 600; }
+.vcard .sub { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+.vcard.main { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.vcard.main .lab, .vcard.main .sub { color: var(--accent-ink); opacity: 0.85; font-family: var(--font); }
+.inv table { font-size: 13px; }
+.inv thead th { background: var(--grid); color: var(--ink-2); font-size: 12px; letter-spacing: 0; text-align: center; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.thsub { display: block; font-size: 10px; font-weight: 400; color: var(--muted); }
+.inv tbody tr.main td { vertical-align: top; padding-block: 12px; }
+.inv tbody tr.main td.st { box-shadow: inset 4px 0 0 var(--pc); padding-left: 14px; }
+tr.main { scroll-margin-top: 190px; }
+.caret { display: inline-block; font-size: 9px; color: var(--muted); margin-right: 6px; transition: transform .15s; }
+tr.main.open .caret { transform: rotate(90deg); color: var(--ink); }
+tr.main.open td { background: var(--accent-soft); }
+.mono { font-family: var(--mono); }
+.muted { color: var(--muted); }
+td.big { font-weight: 600; font-size: 15px; color: var(--ink); }
+.sub2 { display: block; font-size: 11px; color: var(--muted); }
+td.ctr { white-space: normal; min-width: 150px; text-align: left; font-size: 12px; color: var(--ink-2); }
+td.ctr span { display: inline-block; margin-right: 10px; }
+td.ctr b { font-family: var(--mono); color: var(--ink); font-weight: 600; }
+td.run { color: var(--rc); text-align: center; }
+tr.drow > td { padding: 0; background: var(--surface); border-bottom: 2px solid var(--line); text-align: left; white-space: normal; }
+.dpanel { position: sticky; left: 0; max-width: calc(100vw - 34px); padding: 18px 20px 20px; display: grid; gap: 10px; }
+.dp-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; }
+.dp-head h3 { margin: 0; font-size: 15px; font-weight: 700; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { font: inherit; font-size: 12px; font-weight: 600; border: 0; background: var(--surface); color: var(--ink-2); padding: 6px 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.dp-sum { margin: 0; font-size: 13px; color: var(--ink-2); line-height: 1.8; }
+.dp-sum b { font-family: var(--mono); color: var(--ink); }
+.dp-sum b.up { color: var(--good-ink); } .dp-sum b.down { color: var(--crit-ink); }
+.hoverbox { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; background: var(--grid); border-radius: 8px; padding: 8px 14px; font-size: 13px; color: var(--ink-2); max-width: 980px; }
+.hoverbox b { font-family: var(--mono); color: var(--ink); }
+.hoverbox small { color: var(--muted); font-size: 11px; }
+.hoverbox .tag { font-size: 11px; color: var(--muted); margin-left: -8px; }
+.ln { display: inline-block; width: 16px; border-top: 2px solid var(--c); }
+.ln.dashed { border-top-style: dashed; } .ln.dotted { border-top-style: dotted; }
+.sw.round { border-radius: 50%; }
+.dtable { max-width: 100%; }
+.dtable table { font-size: 12px; }
+.dtable th, .dtable td { padding: 5px 7px; text-align: right; font-family: var(--mono); }
+.dtable thead th { font-family: var(--font); background: var(--surface); }
+.dtable thead th.we { color: var(--crit-ink); }
+.dtable th.stick { position: sticky; left: 0; background: var(--surface); z-index: 1; font-family: var(--font); color: var(--ink-2); font-size: 12px; letter-spacing: 0; }
+.dtable td.sod { background: color-mix(in srgb, var(--crit) 10%, transparent); }
+@media (max-width: 860px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .vcard .val { font-size: 22px; } }
+.hcount { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--muted); margin-left: 4px; }
+.scroll5 { max-height: 300px; overflow: auto; overscroll-behavior: contain; border-bottom: 1px solid var(--grid); }
+@media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 860px) { .grid2, .grid-wide { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 520px) {
+  .wrap, .top-inner { padding-inline: 16px; }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi .val { font-size: 20px; }
+  .chart.tall { height: 300px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+h2.sec { margin: 12px 0 -4px; font-size: 17px; font-weight: 700; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+h2.sec .note { font-weight: 400; }
+.kpis.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.pos { color: var(--good-ink); }
+#srcNote { overflow-wrap: anywhere; }
+.dtable th.l, .dtable td.l { text-align: left; }
+.dpanel > * { min-width: 0; max-width: 100%; }
+.dpanel { overflow: hidden; }
+.period b { color: var(--ink); font-weight: 600; }
+.dp-head h3 .note { font-weight: 400; margin-left: 6px; }
+.dtable.po td, .dtable.po th { font-size: 12px; }
+@media (max-width: 860px) { .kpis.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.scroll8 { max-height: 440px; overflow: auto; }
+table.heat td { text-align: center; min-width: 44px; font-family: var(--mono); font-size: 12px; color: var(--ink); }
+table.heat td.l { text-align: left; }
+.scroll7 { max-height: 420px; overflow: auto; overscroll-behavior: contain; border-bottom: 1px solid var(--grid); }
+.scroll10 { max-height: 560px; overflow: auto; overscroll-behavior: contain; border-bottom: 1px solid var(--grid); }
+.tfilters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tfilters input { flex: 1 1 200px; min-width: 0; max-width: 300px; }
+.tfilters select { max-width: 100%; }
+.kpair { display: grid; gap: 12px; }
+.kgroup { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; overflow: hidden; }
+.kcell { display: grid; gap: 6px; align-content: start; padding: 14px 18px; min-width: 0; }
+.kcell + .kcell { border-left: 1px solid var(--grid); }
+.ktag { justify-self: start; font-size: 12px; font-weight: 600; color: var(--ink-2); background: var(--grid); padding: 3px 10px; border-radius: 999px; }
+.kval { font-family: var(--mono); font-size: 24px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); overflow-wrap: anywhere; }
+.ksub { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+.ksub b { font-weight: 600; }
+@media (max-width: 700px) { .kgroup { grid-template-columns: minmax(0, 1fr); } .kcell + .kcell { border-left: 0; border-top: 1px solid var(--grid); } }
+.kpis.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .kpis.five { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .kpis.five { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.dp-sum .sumgrp { margin-right: 18px; }
+.dtable tr.tot th, .dtable tr.tot td { font-weight: 700; color: var(--ink); border-top: 1px solid var(--line); }
+.drawer { position: fixed; inset: 0; z-index: 50; }
+.drawer-back { position: absolute; inset: 0; background: rgba(15, 12, 10, 0.38); }
+.drawer-panel { position: absolute; top: 0; right: 0; bottom: 0; width: min(1120px, 94vw); background: var(--surface); box-shadow: -12px 0 32px rgba(0, 0, 0, 0.18); display: flex; flex-direction: column; }
+.drawer-bar { display: flex; align-items: center; gap: 10px; padding: calc(10px + env(safe-area-inset-top, 0px)) 20px 10px; border-bottom: 1px solid var(--grid); }
+.drawer-bar #drawerClose { margin-left: auto; }
+.drawer-body { flex: 1; overflow: auto; overscroll-behavior: contain; padding-bottom: env(safe-area-inset-bottom, 0px); }
+.drawer .dpanel { position: static; max-width: none; }
+@media (max-width: 700px) { .drawer-panel { width: 100vw; } .drawer-bar { padding-inline: 16px; } .drawer .dpanel { padding-inline: 16px; } }
+#winSel, .pastsel { width: 150px; max-width: 100%; text-overflow: ellipsis; font: inherit; font-size: 13px; border-radius: 999px; padding: 4px 10px; }
+#winSel.on, .pastsel.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.stlegend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 12px; color: var(--ink-2); }
+.stlegend .pill { margin-left: 6px; }
+.stlegend .flabel { margin-right: 2px; }
+.kgroup.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 900px) { .kgroup.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } .kgroup.four .kcell:nth-child(3) { border-left: 0; } .kgroup.four .kcell:nth-child(n+3) { border-top: 1px solid var(--grid); } }
+.ksub .pmcr { display: block; margin-top: 2px; }
+.ksub b.neutral { color: var(--ink-2); }
+#stockSt.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.stbtn { font: inherit; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+.stbtn i { width: 8px; height: 8px; border-radius: 50%; background: var(--pc); }
+.stbtn b { font-weight: 700; }
+.stbtn span { color: var(--muted); font-size: 11px; margin-left: 2px; }
+.stbtn:hover { border-color: var(--accent); }
+.stbtn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.stbtn[aria-pressed="true"] span { color: var(--accent-ink); opacity: 0.8; }
+.yctl { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; }
+</style>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="title-row">
+      <h1>맥널티 쿠팡 로켓배송 · 판매·재고·발주</h1>
+      <span class="period" id="period"></span>
+    </div>
+    <div class="filters" id="winRow">
+      <span class="flabel">기간</span>
+      <div class="chips" id="winChips" role="group" aria-label="기간 선택"></div>
+    </div>
+    <div class="filters" id="yWinRow" hidden>
+      <span class="flabel">기간</span>
+      <div class="chips" id="yPerChips" role="group" aria-label="비교 기간"></div>
+    </div>
+    <div class="filters">
+      <span class="flabel">카테고리</span>
+      <div class="chips" id="grpChips" role="group" aria-label="카테고리 필터"></div>
+      <label class="flabel" for="brandSel">브랜드</label>
+      <select id="brandSel"></select>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="sales" id="tab-sales">판매 현황</button>
+      <button class="tab" role="tab" data-tab="stock" id="tab-stock">재고·발주</button>
+      <button class="tab" role="tab" data-tab="yoy" id="tab-yoy">추이·YoY</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- ========== 판매 현황 ========== -->
+  <section class="view" id="view-sales" role="tabpanel" aria-labelledby="tab-sales">
+    <div class="kpair" id="kpiSales"></div>
+    <div class="panel">
+      <div class="ph"><h2 id="salesChartTitle">일별 매출</h2><span class="note" id="salesChartNote"></span></div>
+      <div class="chart"><canvas id="cDaily" aria-label="매출 막대그래프"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="toolbar"><h2>전체 SKU <span class="hcount" id="nSales"></span></h2></div>
+      <div class="tfilters">
+        <input type="search" id="sfQ" placeholder="SKU명·ID 검색" aria-label="SKU 검색">
+        <select id="sfCat" aria-label="세부카테고리"></select>
+        <select id="sfSt" aria-label="재고 상태"></select>
+        <select id="sfPo" aria-label="입고 예정">
+          <option value="">입고 예정 전체</option><option value="y">입고 예정 있음</option><option value="n">입고 예정 없음</option>
+        </select>
+        <select id="sfSale" aria-label="판매 여부">
+          <option value="">판매 전체</option><option value="y">기간 판매 있음</option><option value="n">기간 판매 없음</option>
+        </select>
+        <button class="chip" id="sfReset">필터 초기화</button>
+      </div>
+      <p class="desc">열 제목을 누르면 정렬, 행을 누르면 SKU 상세가 열립니다. 10개가 넘으면 표 안에서 스크롤됩니다.</p>
+      <div class="stlegend" id="stLegSales"></div>
+      <div class="tbl-wrap scroll10"><table id="tTop"></table></div>
+    </div>
+  </section>
+
+  <!-- ========== 재고·발주 ========== -->
+  <section class="view" id="view-stock" role="tabpanel" aria-labelledby="tab-stock" hidden>
+    <div class="kpis" id="kpiStock"></div>
+    <div class="panel">
+      <div class="toolbar"><h2>전체 SKU 재고 <span class="hcount" id="nAll"></span></h2><div class="tfilters"><input type="search" id="stockSearch" placeholder="SKU명·ID·세부카테고리 검색" aria-label="전체 SKU 재고 검색"></div></div>
+      <p class="desc">열 제목을 누르면 정렬, 행을 누르면 SKU 상세가 열립니다. 7개가 넘으면 표 안에서 스크롤됩니다.</p>
+      <div class="stlegend" id="stLegStock"></div>
+      <div class="tbl-wrap scroll7"><table id="tAll"></table></div>
+    </div>
+    <div class="grid2">
+      <div class="panel">
+        <h2>재고 7일 미만 <span class="hcount" id="nLow"></span></h2>
+        <p class="desc">매출 큰 순서 · 입고 예정 수량을 함께 표시</p>
+        <div class="tbl-wrap scroll5"><table id="tLow"></table></div>
+      </div>
+      <div class="panel">
+        <h2>과잉 재고 · 90일 이상 <span class="hcount" id="nOver"></span></h2>
+        <p class="desc">재고 금액(매입원가 기준) 큰 순서</p>
+        <div class="tbl-wrap scroll5"><table id="tOver"></table></div>
+      </div>
+    </div>
+
+    <h2 class="sec">발주 점검 <span class="note" id="poNote"></span></h2>
+    <div class="kpis four" id="kpiPo"></div>
+    <div class="grid2">
+      <div class="panel">
+        <h2>입고 전 품절 위험 <span class="hcount" id="nGap"></span></h2>
+        <p class="desc">지금 재고가 첫 입고예정일 전에 바닥나는 SKU (입고 예정이 없는 7일 미만 SKU 포함)</p>
+        <div class="tbl-wrap scroll5"><table id="tGap"></table></div>
+      </div>
+      <div class="panel">
+        <h2>입고 후 과잉 예상 <span class="hcount" id="nPoOver"></span></h2>
+        <p class="desc">입고 대기 수량까지 더하면 90일분을 넘는 SKU · 대기 금액 큰 순서</p>
+        <div class="tbl-wrap scroll5"><table id="tPoOver"></table></div>
+      </div>
+      <div class="panel">
+        <h2>입고 지연 <span class="hcount" id="nLate"></span></h2>
+        <p class="desc">입고예정일이 기준일 이전인데 아직 입고 수량이 0인 발주</p>
+        <div class="tbl-wrap scroll5"><table id="tLate"></table></div>
+      </div>
+      <div class="panel">
+        <h2>판매 이력 없는 발주 SKU <span class="hcount" id="nPoOnly"></span></h2>
+        <p class="desc">판매·재고 리포트에 아직 없는 신규 SKU의 발주</p>
+        <div class="tbl-wrap scroll5"><table id="tPoOnly"></table></div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ========== 추이·YoY ========== -->
+  <section class="view" id="view-yoy" role="tabpanel" aria-labelledby="tab-yoy" hidden>
+    <p class="desc" id="yPerDesc" style="margin:0"></p>
+    <div class="kpis five" id="kpiYoy"></div>
+
+
+    <div class="panel">
+      <h2>월별 실적표</h2>
+      <p class="desc">PPM 변화는 %p(포인트) 기준입니다.</p>
+      <div class="tbl-wrap scroll8"><table id="tYMonth"></table></div>
+    </div>
+
+
+    <div class="panel">
+      <div class="toolbar"><h2>전체 SKU YoY <span class="hcount" id="nYAll"></span></h2><input type="search" id="yaSearch" placeholder="SKU명·ID·세부카테고리 검색" aria-label="전체 SKU YoY 검색"></div>
+      <p class="desc" id="yAllDesc"></p>
+      <div class="tbl-wrap scroll10"><table id="tYAll"></table></div>
+    </div>
+    <div class="grid2">
+      <div class="panel">
+        <h2>많이 성장한 SKU <span class="hcount" id="nYUp"></span></h2>
+        <p class="desc">전년 동기 대비 증가액 큰 순서 · 신규 SKU 제외</p>
+        <div class="tbl-wrap scroll5"><table id="tYUp"></table></div>
+      </div>
+      <div class="panel">
+        <h2>많이 감소한 SKU <span class="hcount" id="nYDown"></span></h2>
+        <p class="desc">전년 동기 대비 감소액 큰 순서 · 판매 중단 SKU 제외</p>
+        <div class="tbl-wrap scroll5"><table id="tYDown"></table></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>시즌성 지수</h2>
+      <p class="desc" id="ySeasonDesc"></p>
+      <div class="tbl-wrap"><table id="tYSeason" class="heat"></table></div>
+    </div>
+
+  </section>
+  <p class="note" style="margin-top:24px" id="srcNote"></p>
+</main>
+<div class="drawer" id="drawer" hidden>
+  <div class="drawer-back"></div>
+  <aside class="drawer-panel" role="dialog" aria-modal="true" aria-label="SKU 상세">
+    <div class="drawer-bar"><span class="flabel">SKU 상세</span><span id="drawerTitle"></span><button class="chip" id="drawerClose">닫기 ✕</button></div>
+    <div class="drawer-body" id="drawerBody"><div class="dpanel" id="dpanel2"></div></div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>const DATA_GZ = "__DATA__";</script>
+<script>
+(async function () {
+let DATA;
+try {
+  const bin = Uint8Array.from(atob(DATA_GZ), ch => ch.charCodeAt(0));
+  DATA = JSON.parse(await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'))).text());
+} catch (e) {
+  document.querySelector('main').insertAdjacentHTML('afterbegin', '<p class="panel">데이터를 여는 중 문제가 생겼습니다. 최신 Chrome·Edge·Safari에서 열어주세요.</p>'); return;
+}
+// 재고 배열 앞부분(재고 리포트 이전 기간) 채우기
+DATA.skus.forEach(k => ['st', 'out', 'inq', 'sFC', 'sRC', 'sETC', 'so'].forEach(f => { k[f] = Array(DATA.opsOffset).fill(f === 'so' ? 0 : null).concat(k[f]); }));
+const DAYS = DATA.days, N = DAYS.length, ASOF = DATA.asOf;
+const AVG_DAYS = Math.min(30, N);           // 재고일수 계산용 평균 판매 기간
+const WD = ['일','월','화','수','목','금','토'];
+const sum = a => a.reduce((x, y) => x + y, 0);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const nf = new Intl.NumberFormat('ko-KR');
+const n0 = v => nf.format(Math.round(v));
+function won(v) {
+  const a = Math.abs(v);
+  if (a >= 1e8) return (v / 1e8).toFixed(a >= 1e9 ? 1 : 2) + '억';
+  if (a >= 1e4) return nf.format(Math.round(v / 1e4)) + '만';
+  return nf.format(Math.round(v));
+}
+const pct = (v, d = 1) => isFinite(v) ? (v * 100).toFixed(d) + '%' : '–';
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const md = d => +d.slice(5, 7) + '/' + +d.slice(8);
+const wd = d => WD[new Date(d + 'T00:00:00').getDay()];
+function addDays(d, n) { const t = new Date(d + 'T00:00:00'); t.setDate(t.getDate() + n); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; }
+const dayDiff = (a, b) => Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 864e5);
+const GRPC = { '커피': '--s1', '음료': '--s2', '기타': '--s3' };
+
+/* ---------- 상태 기준 ---------- */
+function docBucket(d) {
+  if (d == null) return { key: 'na', label: '정보없음', c: '--idle' };
+  if (d === Infinity) return { key: 'nosale', label: '판매없음', c: '--idle' };
+  if (d < 7) return { key: 'urgent', label: '긴급', c: '--crit' };
+  if (d < 14) return { key: 'caution', label: '주의', c: '--serious' };
+  if (d < 90) return { key: 'stable', label: '안정', c: '--good' };
+  return { key: 'over', label: '과잉', c: '--warn' };
+}
+const docTxt = d => d == null ? '–' : d === Infinity ? '판매없음' : d >= 999 ? '999+일' : Math.floor(d) + '일';
+const BORD = { urgent: 0, caution: 1, stable: 2, over: 3, nosale: 4, na: 5 };
+
+/* ---------- 재고·발주 지표 (기준일 고정) ---------- */
+DATA.skus.forEach(k => {
+  k.avg30 = sum(k.q.slice(-AVG_DAYS)) / AVG_DAYS;
+  k.stock = k.inOps ? k.st[N - 1] : null;
+  const tq = sum(k.q), tc = sum(k.c);
+  k.unitCost = k.uc || (tq ? tc / tq : null);
+  k.stockVal = k.stock != null && k.unitCost != null ? k.stock * k.unitCost : null;
+  k.doc = k.stock == null ? null : (k.avg30 > 0 ? k.stock / k.avg30 : (k.stock > 0 ? Infinity : null));
+  k.bucket = docBucket(k.doc); k.bucketOrd = BORD[k.bucket.key];
+  k.runout = k.doc != null && isFinite(k.doc) ? addDays(ASOF, Math.floor(k.doc)) : null;
+  // 발주: 미입고 수량 = 확정 − 입고
+  k.pending = k.po.map(l => {
+    const [no, ctr, eta, odate, conf, recv, amt, stat, type] = l, q = conf - recv;
+    return { no, ctr, eta, odate, conf, recv, amt, stat, type, q, qamt: conf ? amt * q / conf : 0, late: q > 0 && eta <= ASOF, arr: eta <= ASOF ? addDays(ASOF, 1) : eta };
+  });
+  const pend = k.pending.filter(p => p.q > 0);
+  k.pend = sum(pend.map(p => p.q)); k.pendAmt = sum(pend.map(p => p.qamt));
+  k.firstEta = pend.length ? pend.map(p => p.arr).sort()[0] : null;
+  k.lateN = pend.filter(p => p.late).length;
+  const base = k.stock || 0;
+  k.docPO = k.stock == null ? null : (k.avg30 > 0 ? (base + k.pend) / k.avg30 : (base + k.pend > 0 ? Infinity : null));
+  k.bucketPO = docBucket(k.docPO);
+  k.runoutPO = k.docPO != null && isFinite(k.docPO) ? addDays(ASOF, Math.floor(k.docPO)) : null;
+  // 첫 입고 전 공백일 (재고가 버티는 날 이후 ~ 첫 입고 전날)
+  k.gap = 0;
+  if (k.stock != null && k.avg30 > 0) {
+    const cover = Math.floor(k.doc);
+    if (k.firstEta) k.gap = Math.max(0, dayDiff(ASOF, k.firstEta) - 1 - cover);
+    else if (k.bucket.key === 'urgent') k.gap = Infinity;
+  }
+});
+
+/* ---------- 기간 ---------- */
+const curMonth0 = DAYS.findIndex(d => d.startsWith(ASOF.slice(0, 7)));
+const WINS = [
+  { id: 'd1', quick: true, label: `당일 (${md(ASOF)})`, i0: N - 1, i1: N - 1, prev: [N - 2, N - 2], prevLabel: '전일' },
+  { id: 'mtd', quick: true, label: `당월 (${+ASOF.slice(5, 7)}/1~${+ASOF.slice(8)})`, i0: curMonth0, i1: N - 1, prevLabel: '전월 같은 기간',
+    prev: (() => { const pm0 = DAYS.findIndex(d => d.startsWith(addDays(ASOF.slice(0, 7) + '-01', -1).slice(0, 7))); return pm0 < 0 ? null : [pm0, Math.min(pm0 + (N - 1 - curMonth0), curMonth0 - 1)]; })() },
+  // 연도별: 올해는 1/1~기준일, 지난해는 그 해 전체(데이터가 있는 범위)
+  ...[...new Set(DAYS.map(d => d.slice(0, 4)))].reverse().map(y => {
+    const cur = y === ASOF.slice(0, 4);
+    const idx = DAYS.map((d, i) => d.startsWith(y) ? i : -1).filter(i => i >= 0), i0 = idx[0], i1 = idx[idx.length - 1];
+    const first = DAYS[i0], last = DAYS[i1];
+    const p0 = DAYS.indexOf(`${+y - 1}${first.slice(4)}`), p1 = DAYS.indexOf(`${+y - 1}${last.slice(4)}`);
+    const range = first.endsWith('-01-01') ? '' : ` (${+first.slice(5, 7)}~${+last.slice(5, 7)}월)`;
+    return { id: cur ? 'ytd' : 'y' + y, quick: cur, grp: '연도', label: cur ? `올해 (${y.slice(2)}년)` : `${y.slice(2)}년${range}`, i0, i1,
+      prev: p0 >= 0 && p1 >= 0 ? [p0, p1] : null, prevLabel: '작년 같은 기간' };
+  }),
+  // 월별: 지난달부터 데이터 첫 달까지 (비교는 전월)
+  ...(() => {
+    const ms = [...new Set(DAYS.map(d => d.slice(0, 7)))].filter(m => m !== ASOF.slice(0, 7)).reverse();
+    return ms.map((m, j) => {
+      const idx = DAYS.map((d, i) => d.startsWith(m) ? i : -1).filter(i => i >= 0), pm = ms[j + 1];
+      const pidx = pm ? DAYS.map((d, i) => d.startsWith(pm) ? i : -1).filter(i => i >= 0) : [];
+      return { id: 'm' + m, grp: '월별', label: `${m.slice(2, 4)}년 ${+m.slice(5)}월`, i0: idx[0], i1: idx[idx.length - 1],
+        prev: pidx.length ? [pidx[0], pidx[pidx.length - 1]] : null, prevLabel: '전월' };
+    });
+  })()
+];
+function applyWindow() {
+  const w = WINS.find(x => x.id === state.win) || WINS[1]; state.prev = w.prev; state.prevLabel = w.prevLabel;
+  state.i0 = w.i0; state.i1 = w.i1; state.W = w.i1 - w.i0 + 1; state.wLabel = w.label;
+  const sl = a => a.slice(w.i0, w.i1 + 1);
+  DATA.skus.forEach(k => {
+    const g = sl(k.g), q = sl(k.q), so = sl(k.so);
+    k.G = sum(g); k.Q = sum(q); k.R = sum(sl(k.r)); k.C = sum(sl(k.c)); k.P = sum(sl(k.p)); k.V = sum(sl(k.v)); k.O = sum(sl(k.o)); k.PQ = sum(sl(k.pq)); k.PMC = sum(sl(k.pmc));
+    k.ppm = k.G ? (k.G - k.C * 1.1) / k.G : NaN;
+    k.ret = k.Q ? k.R / k.Q : NaN; k.cvr = k.V ? k.O / k.V : NaN; k.promo = k.G ? k.P / k.G : NaN;
+    k.avgQ = k.Q / state.W;
+    k.soDays = k.inOps || sum(so) ? sum(so) : 0;
+    k.inSum = sum(sl(k.inq));
+    const ok = g.filter((_, i) => !so[i]), b = ok.length ? sum(ok) / ok.length : 0;
+    k.lost = so.reduce((t, s, i) => t + (s ? Math.max(0, b - g[i]) : 0), 0);
+  });
+}
+
+/* ---------- 상태 ---------- */
+const state = { win: 'd1', grp: '전체', brand: '전체', tab: 'sales', q: '', aq: '', st: 'all', open: null, mode: 'yoy',
+  sort: { key: 'G', dir: -1 }, aSort: { key: 'stockVal', dir: -1 } };
+const brands = [...new Set(DATA.skus.map(k => k.brand))].sort();
+function list() { return DATA.skus.filter(k => (state.grp === '전체' || k.grp === state.grp) && (state.brand === '전체' || k.brand === state.brand) && (k.inOps || k.pend > 0 || k.G > 0)); }
+
+/* ---------- 컨트롤 ---------- */
+const winBox = document.getElementById('winChips');
+WINS.filter(w => w.quick).forEach(w => { const b = document.createElement('button'); b.className = 'chip'; b.id = 'win-' + w.id; b.textContent = w.label;
+  b.onclick = () => { state.win = w.id; applyWindow(); renderAll(); }; winBox.appendChild(b); });
+// 지난 기간: 연도·월별 드롭다운
+const winSel = document.createElement('select'); winSel.id = 'winSel'; winSel.setAttribute('aria-label', '지난 기간 선택');
+winSel.innerHTML = '<option value="">지난 기간 ▾</option>' + ['연도', '월별'].map(g => `<optgroup label="${g}">${WINS.filter(w => !w.quick && w.grp === g).map(w => `<option value="${w.id}">${w.label}</option>`).join('')}</optgroup>`).join('');
+winSel.onchange = () => { if (!winSel.value) return; state.win = winSel.value; applyWindow(); renderAll(); };
+winBox.appendChild(winSel);
+const chipBox = document.getElementById('grpChips');
+['전체', '커피', '음료', '기타'].forEach(g => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = g; b.id = 'grp-' + g;
+  b.onclick = () => { state.grp = g; renderAll(); }; chipBox.appendChild(b); });
+const bs = document.getElementById('brandSel');
+bs.innerHTML = ['전체', ...brands].map(b => `<option>${esc(b)}</option>`).join('');
+bs.onchange = () => { state.brand = bs.value; renderAll(); };
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => setTab(t.dataset.tab, true));
+function setTab(tab, push) {
+  closeDrawer();
+  state.tab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.tab === tab));
+  ['sales', 'stock', 'yoy'].forEach(v => document.getElementById('view-' + v).hidden = v !== tab);
+  document.getElementById('winRow').hidden = tab === 'yoy';
+  document.getElementById('yWinRow').hidden = tab !== 'yoy';
+  if (push) try { history.replaceState(null, '', '#' + tab); } catch (e) {}
+  renderAll();
+}
+document.getElementById('stockSearch').oninput = e => { state.aq = e.target.value.trim(); renderStockAll(list()); };
+
+document.getElementById('srcNote').textContent =
+  `데이터: 판매 ${DATA.files.sales.join(', ')} · 재고 ${DATA.files.ops.join(', ')} · 발주 ${DATA.files.po.join(', ') || '없음'} · 생성 ${DATA.generated}. 재고는 같은 날 센터별 행을 합산했고, 같은 날짜가 여러 파일에 있으면 최신 파일 기준입니다.`;
+
+/* ---------- 차트 공통 ---------- */
+const charts = {};
+function mk(id, cfg) { if (charts[id]) charts[id].destroy(); charts[id] = new Chart(document.getElementById(id), cfg); return charts[id]; }
+function baseOpts(extra = {}) {
+  const muted = css('--muted'), grid = css('--grid');
+  return Object.assign({
+    responsive: true, maintainAspectRatio: false, animation: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { backgroundColor: css('--surface'), titleColor: css('--ink'), bodyColor: css('--ink-2'), footerColor: css('--ink-2'),
+        borderColor: css('--line'), borderWidth: 1, padding: 10, boxPadding: 4, usePointStyle: true,
+        titleFont: { family: css('--font'), weight: '600' }, bodyFont: { family: css('--font') }, footerFont: { family: css('--font'), weight: '500' } }
+    },
+    scales: {
+      x: { grid: { display: false }, border: { color: css('--line') }, ticks: { color: muted, font: { family: css('--font'), size: 11 } } },
+      y: { grid: { color: grid }, border: { display: false }, ticks: { color: muted, font: { family: css('--font'), size: 11 } } }
+    }
+  }, extra);
+}
+const refLines = {
+  id: 'refLines',
+  afterDraw(c, _, o) {
+    if (!o || !o.lines || !o.lines.length) return;
+    const { ctx, chartArea: a } = c, ax = c.scales.y;
+    ctx.save(); ctx.font = `11px ${css('--font')}`;
+    const used = [];
+    [...o.lines].sort((p, q) => q.v - p.v).forEach(l => {
+      const y = ax.getPixelForValue(l.v); if (y < a.top || y > a.bottom) return;
+      let ty = y - 4; while (used.some(u => Math.abs(u - ty) < 12)) ty += 12; used.push(ty);
+      ctx.setLineDash(l.dash || [4, 4]); ctx.lineWidth = 1.5; ctx.strokeStyle = l.color || css('--muted');
+      ctx.beginPath(); ctx.moveTo(a.left, y); ctx.lineTo(a.right, y); ctx.stroke();
+      if (l.t) { ctx.fillStyle = l.color || css('--muted'); ctx.textAlign = 'right'; ctx.fillText(l.t, a.right - 4, ty); }
+    });
+    ctx.restore();
+  }
+};
+// 미래 구간(입고 예정·예상 재고) 배경
+const futureBand = {
+  id: 'futureBand',
+  beforeDatasetsDraw(c, _, o) {
+    if (!o || o.from == null) return;
+    const { ctx, chartArea: a } = c, x = c.scales.x;
+    const x0 = (x.getPixelForValue(o.from - 1) + x.getPixelForValue(o.from)) / 2;
+    ctx.save(); ctx.fillStyle = css('--grid'); ctx.globalAlpha = 0.45; ctx.fillRect(x0, a.top, a.right - x0, a.bottom - a.top);
+    ctx.globalAlpha = 1; ctx.fillStyle = css('--muted'); ctx.font = `11px ${css('--font')}`; ctx.fillText('예상 →', x0 + 6, a.top + 12);
+    ctx.restore();
+  }
+};
+
+// 막대 위 숫자 (쌓인 막대는 합계). 막대가 좁으면 세로로 세우고, 그래도 겹치면 몇 칸씩 건너뜀(마지막 막대는 항상 표시)
+const barLabels = {
+  id: 'barLabels',
+  afterDatasetsDraw(c, _, o) {
+    if (!o || !o.fmt) return;
+    const { ctx } = c, n = c.data.labels.length;
+    const metas = c.data.datasets.map((d, i) => ({ d, m: c.getDatasetMeta(i) })).filter(x => x.m.type === 'bar' && !x.m.hidden);
+    const lines = c.data.datasets.map((d, i) => ({ d, m: c.getDatasetMeta(i) })).filter(x => x.m.type === 'line' && !x.m.hidden);
+    if (!metas.length && !lines.length) return;
+    const ref = (metas[0] || lines[0]).m.data;
+    const bw = n > 1 ? Math.abs(ref[1].x - ref[0].x) : 80;
+    const rotate = bw < 34, fs = bw < 16 ? 9 : bw < 26 ? 10 : 11;
+    const step = rotate ? Math.max(1, Math.ceil((fs + 3) / bw)) : 1;
+    ctx.save(); ctx.font = `600 ${fs}px ${css('--font')}`; ctx.fillStyle = css('--ink-2');
+    for (let i = 0; i < n; i++) {
+      if (i % step && i !== n - 1) continue;
+      let val = null, top = Infinity, x = ref[i].x;
+      if (metas.length) {
+        metas.forEach(({ d, m }) => { const v = d.data[i]; if (v == null) return; val = (val || 0) + v; top = Math.min(top, m.data[i].y, m.data[i].base); });
+      } else {
+        lines.forEach(({ d, m }) => { const v = d.data[i]; if (v == null) return; val = v; top = Math.min(top, m.data[i].y); });
+      }
+      if (val == null || !isFinite(top)) continue;
+      const txt = o.fmt(val);
+      if (rotate) { ctx.save(); ctx.translate(x, top - 4); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(txt, 0, 0); ctx.restore(); }
+      else { ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(txt, x, top - 4); }
+    }
+    ctx.restore();
+  }
+};
+const labelPad = (n, wpx) => (wpx / Math.max(1, n) < 34 ? 46 : 22);   // 세로 글씨면 위 여백을 더
+let PANEL = null;
+const soMarks = {
+  id: 'soMarks',
+  afterDatasetsDraw(c) {
+    if (!PANEL || !PANEL.k.soDays) return;
+    const { ctx, chartArea: a } = c, x = c.scales.x;
+    ctx.save(); ctx.fillStyle = css('--crit');
+    for (let j = 0; j < PANEL.W; j++) if (PANEL.k.so[PANEL.i0 + j]) { ctx.beginPath(); ctx.arc(x.getPixelForValue(j), a.bottom - 5, 3.5, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
+  }
+};
+function tiles(el, items) {
+  document.getElementById(el).innerHTML = items.map(t =>
+    `<div class="kpi${t.flag ? ' flag' : ''}" ${t.flag ? `style="--flag:var(${t.flag})"` : ''}>
+      <span class="lab">${t.lab}</span><span class="val">${t.val}${t.unit ? `<small>${t.unit}</small>` : ''}</span>
+      <span class="sub">${t.sub || ''}</span></div>`).join('');
+}
+const ST_TIP = { urgent: '긴급: 재고일수 7일 미만', caution: '주의: 재고일수 7~14일', stable: '안정: 재고일수 14~90일', over: '과잉: 재고일수 90일 이상', nosale: '판매없음: 최근 30일 판매 0', na: '재고 정보 없음' };
+const pill = (b, txt) => `<span class="pill" style="--pc:var(${b.c})"${b.key ? ` title="${ST_TIP[b.key] || ''}"` : ''}>${txt ?? b.label}</span>`;
+const skuCell = k => `<td class="l name">${esc(k.name)}<span class="cat">${esc(k.cat || '')}${k.cat ? ' · ' : ''}${k.id}</span></td>`;
+function fitScroll5() {
+  [['.scroll5', 5], ['.scroll7', 7], ['.scroll10', 10]].forEach(([sel, n]) => document.querySelectorAll(sel).forEach(w => {
+    const rows = [...w.querySelectorAll('tbody tr')], head = w.querySelector('thead');
+    w.style.maxHeight = rows.length <= n ? 'none' : ((head ? head.offsetHeight : 0) + rows.slice(0, n).reduce((t, r) => t + r.offsetHeight, 0) + 2) + 'px';
+  }));
+}
+function smallTable(id, cntId, head, rows, empty = '해당 SKU가 없습니다.') {
+  document.getElementById(cntId).textContent = rows.length + '개';
+  document.getElementById(id).innerHTML = rows.length
+    ? `<thead><tr>${head.map((h, i) => `<th class="${i === 0 ? 'l' : ''}">${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody>`
+    : `<tbody><tr><td class="l empty">${empty}</td></tr></tbody>`;
+}
+const etaTxt = k => k.pend ? `${n0(k.pend)}<span class="sub2">${md(k.firstEta)}${k.lateN ? ' · 지연' : ''}</span>` : '<span class="muted">–</span>';
+
+/* ================= 판매 현황 ================= */
+state.sf = { q: '', cat: '', st: '', po: '', sale: '' }; state.sSort = { key: 'G', dir: -1 };
+const SCOLS2 = [
+  { key: null, lab: '#', l: true }, { key: null, lab: 'SKU', l: true },
+  { key: 'G', lab: '매출' }, { key: 'Q', lab: '판매수량' }, { key: 'avgQ', lab: '일평균<br>판매수량' },
+  { key: 'ppm', lab: 'PPM' }, { key: 'PMC', lab: 'PMC' },
+  { key: 'stock', lab: '재고', sub: '기준일' }, { key: 'doc', lab: '재고일수', sub: '현재' },
+  { key: 'pend', lab: '입고 예정', sub: '수량 · 첫 입고' }, { key: 'docPOs', lab: '입고 후', sub: '재고일수' }
+];
+function renderSales(L) {
+  const { i0, W } = state;
+  const G = sum(L.map(k => k.G)), Q = sum(L.map(k => k.Q)), C = sum(L.map(k => k.C)), R = sum(L.map(k => k.R)),
+        P = sum(L.map(k => k.P)), V = sum(L.map(k => k.V)), O = sum(L.map(k => k.O));
+  const pr = state.prev, LA = DATA.skus.filter(k => (state.grp === '전체' || k.grp === state.grp) && (state.brand === '전체' || k.brand === state.brand));
+  const prevG = pr && pr[0] >= 0 ? sum(LA.map(k => sum(k.g.slice(pr[0], pr[1] + 1)))) : null;
+  const chg = prevG ? (G - prevG) / prevG : null;
+  // ---- 매출·PPM 카드 (총 / 커피·차 / 음료) — 카테고리 필터와 무관하게 브랜드 필터만 적용 ----
+  const LB = DATA.skus.filter(k => state.brand === '전체' || k.brand === state.brand);
+  const rng = (k, f, a, b) => { let s = 0; for (let i = a; i <= b; i++) s += k[f][i]; return s; };
+  const agg = (grpName, a, b) => { const S = LB.filter(k => !grpName || k.grp === grpName); return { g: sum(S.map(k => rng(k, 'g', a, b))), c: sum(S.map(k => rng(k, 'c', a, b))) }; };
+  const cmpLabel = state.win === 'd1' ? '어제' : state.prevLabel;
+  const parts = [[null, '총 매출액(GMV)', '통합 PPM'], ['커피', '커피/차 매출액(GMV)', '커피/차 PPM'], ['음료', '음료 매출액(GMV)', '음료 PPM']].map(([gname, lg, lp]) => {
+    const cur = agg(gname, state.i0, state.i1), prv = pr && pr[0] >= 0 ? agg(gname, pr[0], pr[1]) : null;
+    const ppmC = cur.g ? (cur.g - cur.c * 1.1) / cur.g : NaN, ppmP = prv && prv.g ? (prv.g - prv.c * 1.1) / prv.g : NaN;
+    return { lg, lp, cur, prv, ppmC, ppmP };
+  });
+  const arrow = (d, txt) => !isFinite(d) ? '' : `<b class="${d < 0 ? 'neg' : 'pos'}">${d < 0 ? '▼' : '▲'}${txt}</b>`;
+  const wonFull = v => '₩' + nf.format(Math.round(v));
+  // PMC = 쿠팡 추가 할인가 합계 (증감 화살표는 좋고 나쁨 없이 중립색)
+  const pmcC = sum(LB.map(k => rng(k, 'pmc', state.i0, state.i1))), pmcP = pr && pr[0] >= 0 ? sum(LB.map(k => rng(k, 'pmc', pr[0], pr[1]))) : null;
+  const totG = parts[0].cur.g, d = pmcP != null ? pmcC - pmcP : NaN;
+  const pmcCell = `<div class="kcell"><span class="ktag">PMC</span><span class="kval">${wonFull(pmcC)}</span>
+      <span class="ksub">${pmcP != null ? `${cmpLabel} ${wonFull(pmcP)} · <b class="neutral">${isFinite(d) ? (d < 0 ? '▼' : '▲') + (pmcP ? Math.abs(d / pmcP * 100).toFixed(1) + '%' : '') : ''}</b>` : ''}<span class="pmcr">매출 대비 ${totG ? (pmcC / totG * 100).toFixed(2) + '%' : '–'}</span></span></div>`;
+  document.getElementById('kpiSales').innerHTML = `
+    <div class="kgroup">${parts.map(p => `<div class="kcell"><span class="ktag">${p.lg}</span><span class="kval">${wonFull(p.cur.g)}</span>
+      <span class="ksub">${p.prv ? `${cmpLabel} ${wonFull(p.prv.g)} · ${arrow(p.cur.g - p.prv.g, p.prv.g ? Math.abs((p.cur.g - p.prv.g) / p.prv.g * 100).toFixed(1) + '%' : '')}` : `일평균 ${wonFull(p.cur.g / W)}`}</span></div>`).join('')}</div>
+    <div class="kgroup four">${parts.map(p => `<div class="kcell"><span class="ktag">${p.lp}</span><span class="kval">${isFinite(p.ppmC) ? (p.ppmC * 100).toFixed(2) + '%' : '–'}</span>
+      <span class="ksub">${p.prv && isFinite(p.ppmP) ? `${cmpLabel} ${(p.ppmP * 100).toFixed(2)}% · ${arrow(p.ppmC - p.ppmP, Math.abs((p.ppmC - p.ppmP) * 100).toFixed(2) + '%p')}` : `판매 ${n0(sum(LB.filter(k => p.lp === '통합 PPM' || k.grp === (p.lp.startsWith('커피') ? '커피' : '음료')).map(k => k.Q)))}개`}</span></div>`).join('')}${pmcCell}</div>`;
+
+  // ---- 매출 그래프: 45일 이하는 일별, 그보다 길면 월별. 1일은 최근 14일 중 그날 강조 ----
+  const B = baseOpts(), s1 = css('--s1'), s1s = css('--s1-soft');
+  let labels, vals, titles, hi = null, title, note;
+  if (W === 1) {
+    const a = Math.max(0, N - 14), ix = [...Array(N - a).keys()].map(j => a + j);
+    labels = ix.map(i => `${md(DAYS[i])}(${wd(DAYS[i])})`); titles = ix.map(i => DAYS[i]);
+    vals = ix.map(i => sum(L.map(k => k.g[i]))); hi = ix.length - 1;
+    title = '일별 매출'; note = `최근 14일 · ${md(ASOF)} 강조`;
+  } else if (W <= 45) {
+    const ix = [...Array(W).keys()].map(j => i0 + j);
+    labels = ix.map(i => `${md(DAYS[i])}(${wd(DAYS[i])})`); titles = ix.map(i => DAYS[i]);
+    vals = ix.map(i => sum(L.map(k => k.g[i])));
+    title = '일별 매출'; note = `${state.wLabel}`;
+  } else {
+    const mm = {}; for (let i = i0; i <= state.i1; i++) { const m = DAYS[i].slice(0, 7); (mm[m] ||= []).push(i); }
+    const ms = Object.keys(mm);
+    labels = ms.map(m => `${+m.slice(5)}월${m === ASOF.slice(0, 7) && !ASOF.endsWith(String(daysInMonth(m)).padStart(2, '0')) ? `(~${+ASOF.slice(8)}일)` : ''}`);
+    titles = ms.map(m => m.replace('-', '년 ') + '월'); vals = ms.map(m => sum(L.map(k => sum(mm[m].map(i => k.g[i])))));
+    title = '월별 매출'; note = `${state.wLabel} · 기간이 길어 월 단위로 묶었습니다`;
+  }
+  document.getElementById('salesChartTitle').textContent = title;
+  document.getElementById('salesChartNote').textContent = note;
+  const valLabels = { id: 'valLabels', afterDatasetsDraw(c) {
+    const { ctx } = c, bars = c.getDatasetMeta(0).data, w = bars.length > 1 ? Math.abs(bars[1].x - bars[0].x) : 80;
+    const fs = w < 30 ? 9 : w < 40 ? 10 : 11;
+    ctx.save(); ctx.font = `600 ${fs}px ${css('--font')}`; ctx.fillStyle = css('--ink-2'); ctx.textAlign = 'center';
+    bars.forEach((b, i) => { const v = vals[i], t = Math.abs(v) >= 1e8 ? (v / 1e8).toFixed(2) + '억' : n0(v / 1e4) + '만';
+      if (w < 30) { ctx.save(); ctx.translate(b.x, b.y - 4); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'left'; ctx.fillText(t, 0, 3); ctx.restore(); }
+      else ctx.fillText(t, b.x, b.y - 5); });
+    ctx.restore(); } };
+  mk('cDaily', {
+    type: 'bar',
+    data: { labels, datasets: [{ label: '매출', data: vals, backgroundColor: vals.map((_, i) => hi == null || i === hi ? s1 : s1s), borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: false, maxBarThickness: 48 }] },
+    plugins: [valLabels],
+    options: baseOpts({
+      layout: { padding: { top: vals.length > 31 || (W > 1 && W <= 45 && vals.length > 28) ? 44 : 20 } },
+      plugins: { ...B.plugins, tooltip: { ...B.plugins.tooltip, callbacks: { title: c => titles[c[0].dataIndex], label: c => ` 매출 ${n0(c.raw)}원` } } },
+      scales: { x: { ...B.scales.x, ticks: { ...B.scales.x.ticks, maxRotation: 0, autoSkipPadding: 8 } },
+                y: { ...B.scales.y, beginAtZero: true, grace: '8%', ticks: { ...B.scales.y.ticks, callback: v => won(v) } } },
+      datasets: { bar: { categoryPercentage: 0.82, barPercentage: 0.9 } }
+    })
+  });
+  renderSalesTable(L);
+}
+
+function initSalesFilters() {
+  DATA.skus.forEach(k => k.docPOs = k.pend ? k.docPO : null);   // 입고 예정 없는 SKU는 정렬에서 맨 뒤
+  const cats = [...new Set(DATA.skus.map(k => k.cat))].sort((a, b) => a.localeCompare(b, 'ko'));
+  document.getElementById('sfCat').innerHTML = '<option value="">세부카테고리 전체</option>' + cats.map(c => `<option>${esc(c)}</option>`).join('');
+  document.getElementById('sfSt').innerHTML = '<option value="">재고 상태 전체</option>' +
+    [['urgent', '긴급 (7일 미만)'], ['caution', '주의 (14일 미만)'], ['stable', '안정'], ['over', '과잉 (90일 이상)'], ['nosale', '판매없음'], ['na', '재고 정보없음']].map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  const bind = (id, key, ev = 'change') => document.getElementById(id).addEventListener(ev, e => { state.sf[key] = e.target.value.trim(); renderSalesTable(list()); });
+  bind('sfQ', 'q', 'input'); bind('sfCat', 'cat'); bind('sfSt', 'st'); bind('sfPo', 'po'); bind('sfSale', 'sale');
+  document.getElementById('sfReset').onclick = () => { state.sf = { q: '', cat: '', st: '', po: '', sale: '' };
+    ['sfQ', 'sfCat', 'sfSt', 'sfPo', 'sfSale'].forEach(id => document.getElementById(id).value = ''); renderSalesTable(list()); };
+}
+function renderSalesTable(L) {
+  const f = state.sf, q = f.q.toLowerCase();
+  const rows = L.filter(k => (!q || k.name.toLowerCase().includes(q) || String(k.id).includes(q)) && (!f.cat || k.cat === f.cat) &&
+    (!f.st || k.bucket.key === f.st) && (!f.po || (f.po === 'y') === (k.pend > 0)) && (!f.sale || (f.sale === 'y') === (k.G > 0))).sort(sorter(state.sSort));
+  renderStLegend('stLegSales', L, f.st, v => { state.sf.st = v; document.getElementById('sfSt').value = v; renderSalesTable(list()); });
+  document.getElementById('nSales').textContent = `${rows.length}개${rows.length !== L.length ? ` / 전체 ${L.length}개` : ''}`;
+  const t = document.getElementById('tTop');
+  t.innerHTML = headRow(SCOLS2, state.sSort, 'data-i') + '<tbody>' + (rows.length ? rows.map((k, i) => `<tr class="click" data-id="${k.id}">
+      <td class="l muted">${i + 1}</td>${skuCell(k)}
+      <td><b>${won(k.G)}</b></td>
+      <td>${n0(k.Q)}</td><td>${k.avgQ.toFixed(1)}</td>
+      <td class="${k.ppm < 0 ? 'neg' : ''}">${pct(k.ppm)}</td><td>${k.PMC ? won(k.PMC) : '–'}</td>
+      <td>${k.stock == null ? '–' : n0(k.stock)}</td><td>${pill(k.bucket, docTxt(k.doc))}</td><td>${etaTxt(k)}</td>
+      <td>${k.pend ? pill(k.bucketPO, docTxt(k.docPO)) : '<span class="muted">–</span>'}</td></tr>`).join('')
+    : `<tr><td class="l empty" colspan="${SCOLS2.length}">조건에 맞는 SKU가 없습니다.</td></tr>`) + '</tbody>';
+  t.querySelectorAll('th.sortable').forEach(th => th.onclick = () => {
+    const c = SCOLS2[+th.dataset.i];
+    state.sSort = { key: c.key, dir: state.sSort.key === c.key ? -state.sSort.dir : (['doc', 'docPOs'].includes(c.key) ? 1 : -1) };
+    renderSalesTable(list());
+  });
+  fitScroll5();
+}
+
+/* ================= 재고·발주 ================= */
+function renderStock(L) {
+  const O = L.filter(k => k.inOps);
+  const stock = sum(O.map(k => k.stock)), stockVal = sum(O.map(k => k.stockVal || 0));
+  const docs = O.filter(k => k.doc != null && isFinite(k.doc)).map(k => k.doc).sort((a, b) => a - b);
+  const median = docs.length ? docs[Math.floor(docs.length / 2)] : NaN;
+  const low = O.filter(k => k.bucket.key === 'urgent'), over = O.filter(k => k.bucket.key === 'over' || (k.bucket.key === 'nosale' && k.stock > 0));
+  const soDays = sum(O.map(k => k.soDays)), lost = sum(O.map(k => k.lost)), G = sum(L.map(k => k.G));
+  tiles('kpiStock', [
+    { lab: `${md(ASOF)} 재고`, val: n0(stock), unit: '개', sub: `매입원가 기준 ${won(stockVal)}원` },
+    { lab: '재고일수 중앙값', val: isFinite(median) ? Math.floor(median) : '–', unit: '일', sub: `최근 ${AVG_DAYS}일 평균 판매 기준` },
+    { lab: '재고 7일 미만', val: low.length, unit: 'SKU', sub: `입고 예정 있는 SKU ${low.filter(k => k.pend).length}개`, flag: '--crit' },
+    { lab: '재고 90일 이상', val: over.length, unit: 'SKU', sub: '판매없음 포함 과잉 재고', flag: '--warn' },
+    { lab: `품절 SKU·일 · ${state.wLabel}`, val: n0(soDays), unit: '건', sub: `품절 경험 SKU ${O.filter(k => k.soDays).length}개` },
+    { lab: `품절 추정 손실 · ${state.wLabel}`, val: won(lost), unit: '원', sub: `기간 매출의 ${pct(lost / G)}`, flag: '--serious' }
+  ]);
+  smallTable('tLow', 'nLow', ['SKU', '재고', '일평균 판매', '재고일수', '입고 예정', '기간 매출'], [...low].sort((a, b) => b.G - a.G).map(k =>
+    `<tr class="click" data-id="${k.id}">${skuCell(k)}<td>${n0(k.stock)}</td><td>${k.avg30.toFixed(1)}</td><td>${pill(k.bucket, docTxt(k.doc))}</td><td>${etaTxt(k)}</td><td>${won(k.G)}</td></tr>`));
+  smallTable('tOver', 'nOver', ['SKU', '재고', '재고 금액', '재고일수', '입고 대기'], [...over].sort((a, b) => (b.stockVal || 0) - (a.stockVal || 0)).map(k =>
+    `<tr class="click" data-id="${k.id}">${skuCell(k)}<td>${n0(k.stock)}</td><td>${k.stockVal != null ? won(k.stockVal) : '–'}</td><td>${pill(k.bucket, docTxt(k.doc))}</td><td class="${k.pend ? 'neg' : ''}">${k.pend ? n0(k.pend) : '–'}</td></tr>`));
+
+  // ---- 발주 점검 ----
+  const P = L.filter(k => k.pend > 0), lines = L.flatMap(k => k.pending.filter(p => p.q > 0).map(p => ({ k, p })));
+  const late = lines.filter(x => x.p.late), allLines = L.flatMap(k => k.pending);
+  const gap = O.filter(k => k.gap > 0), poOver = O.filter(k => k.pend > 0 && (k.bucketPO.key === 'over' || k.bucketPO.key === 'nosale'));
+  const confAll = sum(allLines.map(p => p.conf)), recvAll = sum(allLines.map(p => p.recv));
+  const poDates = allLines.map(p => p.odate).sort();
+  document.getElementById('poNote').textContent = poDates.length ? `· 발주일 ${md(poDates[0])}~${md(poDates[poDates.length - 1])} · 미입고 = 확정 − 입고 수량, 재고는 ${md(ASOF)} 기준` : '· 발주 자료 없음';
+  tiles('kpiPo', [
+    { lab: '입고 대기 수량', val: n0(sum(P.map(k => k.pend))), unit: '개', sub: `${won(sum(P.map(k => k.pendAmt)))}원 · SKU ${P.length}개` },
+    { lab: '입고 진행률', val: pct(confAll ? recvAll / confAll : NaN, 0), sub: `확정 ${n0(confAll)} 중 입고 ${n0(recvAll)}` },
+    { lab: '입고 지연 발주', val: late.length, unit: '건', sub: `미입고 ${n0(sum(late.map(x => x.p.q)))}개`, flag: late.length ? '--serious' : null },
+    { lab: '입고 전 품절 위험', val: gap.length, unit: 'SKU', sub: `입고 후 과잉 예상 ${poOver.length}개`, flag: gap.length ? '--crit' : null }
+  ]);
+  smallTable('tGap', 'nGap', ['SKU', '재고', '일평균', '재고 소진', '첫 입고', '공백'], [...gap].sort((a, b) => b.avg30 - a.avg30).map(k =>
+    `<tr class="click" data-id="${k.id}">${skuCell(k)}<td>${n0(k.stock)}</td><td>${k.avg30.toFixed(1)}</td><td>${k.runout ? md(k.runout) : '–'}</td>
+     <td>${k.firstEta ? md(k.firstEta) : '<span class="neg">발주 없음</span>'}</td><td class="neg">${isFinite(k.gap) ? k.gap + '일' : '–'}</td></tr>`), '입고 전에 재고가 바닥나는 SKU가 없습니다.');
+  smallTable('tPoOver', 'nPoOver', ['SKU', '재고', '일평균', '입고 대기', '대기 금액', '입고 후 재고일수'], [...poOver].sort((a, b) => b.pendAmt - a.pendAmt).map(k =>
+    `<tr class="click" data-id="${k.id}">${skuCell(k)}<td>${n0(k.stock)}</td><td>${k.avg30.toFixed(1)}</td><td>${n0(k.pend)}</td><td>${won(k.pendAmt)}</td><td>${pill(k.bucketPO, docTxt(k.docPO))}</td></tr>`));
+  smallTable('tLate', 'nLate', ['SKU', '발주번호', '센터', '입고예정', '미입고'], late.sort((a, b) => a.p.eta.localeCompare(b.p.eta)).map(({ k, p }) =>
+    `<tr class="click" data-id="${k.id}">${skuCell(k)}<td class="mono">${p.no}</td><td>${esc(p.ctr)}</td><td class="neg">${md(p.eta)}</td><td>${n0(p.q)}</td></tr>`), '지연된 발주가 없습니다.');
+  const PO_ONLY = DATA.poOnly || [];
+  document.getElementById('nPoOnly').textContent = PO_ONLY.length + '개';
+  document.getElementById('tPoOnly').innerHTML = PO_ONLY.length ? `<thead><tr><th class="l">SKU</th><th>확정</th><th>입고</th><th>첫 입고예정</th><th>발주 금액</th></tr></thead><tbody>` +
+    PO_ONLY.map(x => { const c = sum(x.po.map(l => l[4])), r = sum(x.po.map(l => l[5])), e = x.po.map(l => l[2]).sort()[0];
+      return `<tr><td class="l name">${esc(x.name)}<span class="cat">${x.id}</span></td><td>${n0(c)}</td><td>${n0(r)}</td><td>${md(e)}</td><td>${won(sum(x.po.map(l => l[6])))}</td></tr>`; }).join('') + '</tbody>'
+    : '<tbody><tr><td class="l empty">없음</td></tr></tbody>';
+  renderStockAll(L);
+  fitScroll5();
+}
+
+const ACOLS = [
+  { key: 'bucketOrd', lab: '상태', l: true }, { key: null, lab: 'SKU', l: true },
+  { key: 'stock', lab: '재고' }, { key: 'stockVal', lab: '재고 금액' },
+  { key: 'avg30', lab: '일평균 판매', sub: '최근 30일' }, { key: 'doc', lab: '재고일수', sub: '현재' },
+  { key: 'pend', lab: '입고 예정', sub: '수량 · 첫 입고' }, { key: 'docPOs', lab: '입고 후', sub: '재고일수' },
+  { key: 'soDays', lab: '품절일', sub: '기간' }
+];
+function sorter(st) {
+  const { key, dir } = st;
+  const v = k => { const x = k[key]; return x == null || (typeof x === 'number' && isNaN(x)) ? (dir < 0 ? -Infinity : Infinity) : x; };
+  return (a, b) => (dir * (v(a) - v(b))) || b.G - a.G;
+}
+function headRow(cols, st, attr) {
+  return `<thead><tr>${cols.map((c, i) => `<th class="${c.l ? 'l ' : ''}${c.key ? 'sortable' : ''}" ${c.key ? `${attr}="${i}"` : ''} ${st.key === c.key && c.key ? `aria-sort="${st.dir < 0 ? 'descending' : 'ascending'}"` : ''}>${c.lab}${c.sub ? `<span class="thsub">${c.sub}</span>` : ''}</th>`).join('')}</tr></thead>`;
+}
+const runTxt = (date, d, b) => date ? `<span style="color:var(${b.key === 'urgent' ? '--crit-ink' : b.key === 'caution' ? '--serious-ink' : '--ink-2'})">${date}</span><span class="sub2">(${Math.floor(d)}일)</span>` : `<span class="muted">${docTxt(d)}</span>`;
+const ST_LEG = [['', '전체', '', null], ['urgent', '긴급', '7일 미만', '--crit'], ['caution', '주의', '7~14일', '--serious'], ['stable', '안정', '14~90일', '--good'],
+  ['over', '과잉', '90일 이상', '--warn'], ['nosale', '판매없음', '최근 30일 판매 0', '--idle'], ['na', '정보없음', '재고 자료 없음', '--idle']];
+function renderStLegend(id, L, cur, onPick) {
+  const el = document.getElementById(id); if (!el) return;
+  const cnt = v => v ? L.filter(k => k.bucket.key === v).length : L.length;
+  el.innerHTML = '<span class="flabel">상태</span>' + ST_LEG.filter(([v]) => !v || cnt(v)).map(([v, lab, rule, c]) =>
+    `<button class="stbtn" data-st="${v}" aria-pressed="${cur === v}"${c ? ` style="--pc:var(${c})"` : ''}>${c ? '<i></i>' : ''}${lab} <b>${cnt(v)}</b>${rule ? `<span>${rule}</span>` : ''}</button>`).join('') +
+    '<span class="muted">· 재고일수 = 기준일 재고 ÷ 최근 30일 일평균 판매량</span>';
+  el.querySelectorAll('.stbtn').forEach(b => b.onclick = () => onPick(b.dataset.st));
+}
+const ST_OPTS = [['', '상태 전체'], ['urgent', '긴급 (7일 미만)'], ['caution', '주의 (7~14일)'], ['stable', '안정 (14~90일)'], ['over', '과잉 (90일 이상)'], ['nosale', '판매없음'], ['na', '재고 정보없음']];
+state.ast = '';
+function renderStockAll(L) {
+  const q = state.aq.toLowerCase();
+  // 상태 범례 = 필터 버튼
+  renderStLegend('stLegStock', L, state.ast, v => { state.ast = v; renderStockAll(list()); });
+  const rows = L.filter(k => (!state.ast || k.bucket.key === state.ast) && (!q || k.name.toLowerCase().includes(q) || String(k.id).includes(q) || k.cat.includes(q))).sort(sorter(state.aSort));
+  document.getElementById('nAll').textContent = rows.length === L.length ? `${L.length}개` : `${rows.length}개 / 전체 ${L.length}개`;
+  const t = document.getElementById('tAll');
+  t.innerHTML = headRow(ACOLS, state.aSort, 'data-i') + '<tbody>' + (rows.length ? rows.map(k => `<tr class="click" data-id="${k.id}">
+      <td class="l">${pill(k.bucket)}</td>${skuCell(k)}
+      <td><b>${k.stock == null ? '–' : n0(k.stock)}</b></td>
+      <td>${k.stockVal == null ? '–' : won(k.stockVal)}</td><td>${k.avg30.toFixed(1)}</td>
+      <td>${pill(k.bucket, docTxt(k.doc))}</td>
+      <td>${etaTxt(k)}</td>
+      <td>${k.pend ? pill(k.bucketPO, docTxt(k.docPO)) : '<span class="muted">–</span>'}</td>
+      <td class="${k.soDays ? 'neg' : ''}">${k.soDays ? k.soDays + '일' : '–'}</td></tr>`).join('')
+    : `<tr><td class="l empty" colspan="${ACOLS.length}">검색 결과가 없습니다.</td></tr>`) + '</tbody>';
+  t.querySelectorAll('th.sortable').forEach(th => th.onclick = () => {
+    const c = ACOLS[+th.dataset.i];
+    state.aSort = { key: c.key, dir: state.aSort.key === c.key ? -state.aSort.dir : (['doc', 'docPOs', 'bucketOrd'].includes(c.key) ? 1 : -1) };
+    renderStockAll(list());
+  });
+  fitScroll5();
+}
+
+/* ================= SKU 상세 ================= */
+const CG = [{ k: 'sFC', l: 'FC', c: '--s1' }, { k: 'sRC', l: 'RC', c: '--s2' }, { k: 'sETC', l: '기타센터', c: '--s3' }];
+
+function renderPanel(k) {
+  const el = document.getElementById('dpanel2');
+  if (!el) return;
+  const { i0, W } = state, idx = [...Array(W).keys()].map(j => i0 + j), wDays = idx.map(i => DAYS[i]);
+  PANEL = { k, i0, W };
+  const S = a => idx.map(i => a[i]);
+  const g = S(k.g), q = S(k.q), c = S(k.c), p = S(k.p), pq = S(k.pq);
+  const ppmD = g.map((x, j) => x ? (x - c[j] * 1.1) / x * 100 : null);
+  const avg = k.Q / W, mx = Math.max(...q), mxi = q.indexOf(mx);
+  const r7 = sum(k.q.slice(-7)) / Math.min(7, N), p7 = N >= 14 ? sum(k.q.slice(-14, -7)) / 7 : NaN;
+  const chg = p7 ? (r7 - p7) / p7 : NaN;
+  const modes = [...(HMAP.has(k.id) ? [['yoy', '월별 추이']] : []), ['qty', '일별 판매량'], ['sales', '일별 매출'], ['ppm', '일별 PPM'], ['stock', '재고·입고']];
+  if (state.mode === 'yoy' && !HMAP.has(k.id)) state.mode = 'qty';
+
+  // 미래: 기준일 다음날부터, 마지막 입고 +7일 또는 최소 14일
+  const lastArr = k.pending.filter(x => x.q > 0).map(x => x.arr).sort().pop();
+  const F = k.inOps ? Math.min(45, Math.max(14, lastArr ? dayDiff(ASOF, lastArr) + 7 : 14)) : 0;
+  const fDays = [...Array(F).keys()].map(j => addDays(ASOF, j + 1));
+  const arrive = fDays.map(d => sum(k.pending.filter(x => x.q > 0 && x.arr === d).map(x => x.q)));
+  let s0 = k.stock || 0; const proj = fDays.map((_, j) => (s0 = Math.max(0, s0 - k.avg30 + arrive[j])));
+  const showFuture = state.mode === 'stock' && F > 0 && state.i1 === N - 1;
+
+  el.innerHTML = `
+    <div class="dp-head">
+      <h3>${esc(k.name)} · 일별 추이 <span class="note">${state.wLabel}</span></h3>
+      <div class="seg" role="group" aria-label="그래프 선택">${modes.map(([m, l]) => `<button id="mode-${m}" aria-pressed="${state.mode === m}">${l}</button>`).join('')}</div>
+    </div>
+    <p class="dp-sum">기간 합계 <b>${n0(k.Q)}개</b> · 매출 <b>${won(k.G)}원</b> · 평균 판매단가 <b>${k.Q ? n0(k.G / k.Q) + '원' : '–'}</b> · 일평균 <b>${avg.toFixed(1)}</b> · 최대 <b>${n0(mx)}</b>${mx ? ` (${md(wDays[mxi])})` : ''}
+      · 최근 7일 평균 <b>${r7.toFixed(1)}</b> ${isFinite(chg) ? `(직전 7일 대비 <b class="${chg < 0 ? 'down' : 'up'}">${chg > 0 ? '+' : ''}${(chg * 100).toFixed(0)}%</b>)` : ''}
+      · PPM <b>${pct(k.ppm)}</b> · 전환율 <b>${pct(k.cvr)}</b> · 반품률 <b>${pct(k.ret)}</b> · 품절 <b>${k.soDays}일</b> · 발주상태 <b>${esc(k.status)}</b>
+      ${k.pend ? `<br>입고 대기 <b>${n0(k.pend)}개</b> (${won(k.pendAmt)}원) · 첫 입고 <b>${md(k.firstEta)}</b>${k.lateN ? ` · <b class="down">지연 ${k.lateN}건</b>` : ''} · 예상 소진 <b>${k.runout ? md(k.runout) : docTxt(k.doc)}</b> → 발주 반영 <b>${k.runoutPO ? md(k.runoutPO) : docTxt(k.docPO)}</b>${k.gap > 0 && isFinite(k.gap) ? ` · <b class="down">입고 전 ${k.gap}일 공백</b>` : ''}` : ''}</p>
+    <div class="hoverbox" id="hb"></div>
+    <div class="chart"><canvas id="cOpen"></canvas></div>
+    <div class="legend" id="openLegend"></div>
+    <details class="daily" open><summary>일자별 상세 표</summary><div class="tbl-wrap dtable"><table id="tDaily"></table></div></details>
+
+    ${k.po.length ? `<details class="daily"><summary>발주 내역 ${k.po.length}건</summary><div class="tbl-wrap dtable po"><table>
+      <thead><tr><th class="l">발주번호</th><th class="l">발주일</th><th class="l">센터</th><th class="l">입고예정</th><th>확정</th><th>입고</th><th>미입고</th><th>금액</th><th class="l">현황</th></tr></thead>
+      <tbody>${k.pending.map(x => `<tr><td class="l">${x.no}</td><td class="l">${md(x.odate)}</td><td class="l">${esc(x.ctr)}</td><td class="l ${x.late ? 'neg' : ''}">${md(x.eta)}${x.late ? ' 지연' : ''}</td>
+        <td>${n0(x.conf)}</td><td>${n0(x.recv)}</td><td>${x.q ? n0(x.q) : '·'}</td><td>${won(x.amt)}</td><td class="l">${esc(x.stat)}${x.type !== '일반' ? ` · ${esc(x.type)}` : ''}</td></tr>`).join('')}</tbody></table></div></details>` : ''}`;
+
+  const hb = j => {
+    const box = document.getElementById('hb');
+    if (j >= W) { const f = j - W;
+      box.innerHTML = `<b>${fDays[f]} (${wd(fDays[f])})</b><span class="tag">예상</span><span>예상 재고 <b>${n0(proj[f])}</b>개</span>${arrive[f] ? `<span>입고 예정 <b>${n0(arrive[f])}</b>개</span>` : ''}<span class="muted">하루 ${k.avg30.toFixed(1)}개 판매 가정</span>`; return; }
+    const i = idx[j], ctr = CG.filter(x => k[x.k][i]).map(x => `${x.l} ${n0(k[x.k][i])}`).join(' · ');
+    box.innerHTML = `<b>${DAYS[i]} (${wd(DAYS[i])})</b>${i === N - 1 ? '<span class="tag">기준일</span>' : ''}
+      <span>판매 <b>${n0(k.q[i])}</b>개</span><span>매출 <b>${won(k.g[i])}</b></span><span>평균 판매단가 <b>${k.q[i] ? n0(k.g[i] / k.q[i]) : '–'}</b></span>
+      <span>PPM <b class="${ppmD[j] < 0 ? 'neg' : ''}">${ppmD[j] == null ? '–' : ppmD[j].toFixed(1) + '%'}</b></span>
+      <span>재고 <b>${k.inOps || k.st[i] ? n0(k.st[i]) : '–'}</b>${ctr ? ` <small>(${ctr})</small>` : ''}</span>
+      ${k.inq[i] ? `<span>입고 <b>${n0(k.inq[i])}</b></span>` : ''}${k.so[i] ? pill({ c: '--crit' }, '품절') : ''}`;
+  };
+  hb(W - 1);
+
+  const labels = [...wDays, ...(showFuture ? fDays : [])].map(d => md(d));
+  const B = baseOpts();
+  const xs = { ...B.scales.x, stacked: true, ticks: { ...B.scales.x.ticks, maxRotation: 0, autoSkipPadding: 6 } };
+  const yNum = f => ({ ...B.scales.y, stacked: true, beginAtZero: true, grace: '12%', ticks: { ...B.scales.y.ticks, callback: f } });
+  const ink2 = css('--ink-2'), crit = css('--crit');
+  const bar = (label, data, col, top) => ({ label, data, backgroundColor: css(col), stack: 's', borderRadius: top ? { topLeft: 3, topRight: 3 } : 0, borderSkipped: false });
+  const opts = (y, lines, tipLabel, extra = {}) => baseOpts({
+    interaction: { mode: 'index', intersect: false },
+    onHover: (e, els) => { if (els[0]) hb(els[0].index); },
+    layout: { padding: { top: labelPad(labels.length, el.clientWidth || 900) } },
+    plugins: { ...B.plugins, refLines: { lines }, futureBand: extra.futureBand || {}, barLabels: { fmt: extra.fmt || (v => n0(v)) },
+      tooltip: { ...B.plugins.tooltip, filter: it => it.raw != null, callbacks: { title: it => { const j = it[0].dataIndex, d = j < W ? wDays[j] : fDays[j - W]; return `${d} (${wd(d)})${j >= W ? ' · 예상' : ''}`; }, label: tipLabel } } },
+    scales: { x: xs, y },
+    datasets: { bar: { categoryPercentage: 0.82, barPercentage: 0.92 } }
+  });
+  const lgd = items => document.getElementById('openLegend').innerHTML = items.map(([t, col, kind]) =>
+    `<span>${kind === 'line' ? `<i class="ln ${col[1] || ''}" style="--c:${col[0]}"></i>` : `<i class="sw" style="--c:var(${col})"></i>`}${t}</span>`).join('') +
+    (k.soDays && state.mode !== 'stock' ? `<span><i class="sw round" style="--c:var(--crit)"></i>품절일</span>` : '') + '<span class="muted">· 막대에 마우스를 올리면 위 줄에 그날 값</span>';
+
+  if (state.mode === 'yoy') {
+    const hk = HMAP.get(k.id), Q = hk.q, Gm = hk.g, Cm = hk.c;
+    const lf = LASTFULL, last3 = [lf - 2, lf - 1, lf].filter(i => i >= 0);
+    const lyI = i => mIdx(lyOf(HM[i]));
+    const s3 = sum(last3.map(i => Q[i])), ly3 = sum(last3.map(i => lyI(i) >= 0 ? Q[lyI(i)] : 0));
+    const avg3 = s3 / last3.length, max3 = Math.max(...last3.map(i => Q[i]));
+    const pctB = (c, l) => l ? `<b class="${c < l ? 'down' : 'up'}">${c >= l ? '+' : ''}${((c - l) / l * 100).toFixed(0)}%</b>` : '–';
+    const wts = [3, 2, 1], wq = last3.length === 3 ? (Q[lf] * 3 + Q[lf - 1] * 2 + Q[lf - 2]) / 6 : avg3;   // 월 판매량(가중): 최근 달 3 · 전달 2 · 전전달 1
+    el.querySelector('.dp-sum').innerHTML = `<span class="sumgrp">최근 3개월 합 <b>${n0(s3)}</b> · ${ly3 ? `전년 같은 기간 <b>${n0(ly3)}</b> (${pctB(s3, ly3)})` : '전년 같은 기간 판매 없음'}</span>
+      <span class="sumgrp">3개월 평균 <b>${n0(avg3)}</b> · 최대 <b>${n0(max3)}</b> · 월 판매량(가중) <b>${n0(wq)}</b></span>
+      ${k.inOps ? `<br><span class="sumgrp">재고 <b>${n0(k.stock)}</b> · 재고일수 <b>${docTxt(k.doc)}</b>${k.pend ? ` · 입고 대기 <b>${n0(k.pend)}</b> (첫 입고 ${md(k.firstEta)}${k.lateN ? ', 지연 있음' : ''}) · 예상 소진 <b>${k.runout ? md(k.runout) : docTxt(k.doc)}</b> → 발주 반영 <b>${k.runoutPO ? md(k.runoutPO) : docTxt(k.docPO)}</b>` : ''}</span>` : ''}`;
+    el.querySelector('h3').innerHTML = `${esc(k.name)} · 월별 판매 추이`;
+    const mhb = i => {
+      const j = lyI(i), pp = Gm[i] ? (Gm[i] - Cm[i] * 1.1) / Gm[i] : NaN, part = PARTIAL && i === HMN - 1;
+      const lq = part ? hk.ly.q : (j >= 0 ? Q[j] : null);
+      document.getElementById('hb').innerHTML = `<b>${HM[i].replace('-', '년 ')}월</b>${part ? `<span class="tag">1~${H.mtdDays}일 · 진행 중</span>` : i === lf ? '<span class="tag">최근 달</span>' : ''}
+        <span>판매 <b>${n0(Q[i])}</b></span><span>매출 <b>${won(Gm[i])}</b></span><span>PPM <b>${pct(pp)}</b></span><span>평균 판매단가 <b>${Q[i] ? n0(Gm[i] / Q[i]) : '–'}</b></span>
+        ${i > 0 ? (part ? `<span>전월 대비(일평균) ${pctB(Q[i] / H.mtdDays, Q[i - 1] / daysInMonth(HM[i - 1]))}</span>` : `<span>전월 대비 ${pctB(Q[i], Q[i - 1])}</span>`) : ''}<span>전년 동월${part ? '(같은 날짜)' : ''} ${lq ? `<b>${n0(lq)}</b> ${pctB(Q[i], lq)}` : '<b>없음</b>'}</span>`;
+    };
+    mhb(PARTIAL ? HMN - 1 : lf);
+    const yearCol = ym => ym.slice(0, 4) === curYM.slice(0, 4) ? '--s1' : '--s1-soft';
+    const yearDiv = { id: 'yearDiv', afterDraw(c) {
+      const { ctx, chartArea: a } = c, x = c.scales.x; ctx.save(); ctx.font = `600 12px ${css('--font')}`; ctx.fillStyle = css('--ink');
+      HM.forEach((ym, i) => { if (i === 0 || ym.endsWith('-01')) { const px = i === 0 ? a.left : (x.getPixelForValue(i - 1) + x.getPixelForValue(i)) / 2;
+        if (i > 0) { ctx.setLineDash([3, 3]); ctx.strokeStyle = css('--muted'); ctx.beginPath(); ctx.moveTo(px, a.top); ctx.lineTo(px, a.bottom); ctx.stroke(); }
+        ctx.fillText(ym.slice(0, 4) + '년', px + 6, a.top + 12); } });
+      ctx.restore(); } };
+    mk('cOpen', { type: 'bar',
+      data: { labels: HM.map(ym => (PARTIAL && ym === curYM) ? `${+ym.slice(5)}*` : String(+ym.slice(5))),
+        datasets: [{ label: '판매량', data: Q, backgroundColor: HM.map(ym => css(PARTIAL && ym === curYM ? '--idle' : '--s1')), borderRadius: { topLeft: 3, topRight: 3 }, borderSkipped: false }] },
+      plugins: [yearDiv, barLabels],
+      options: baseOpts({ layout: { padding: { top: labelPad(HMN, el.clientWidth || 900) + 14 } }, onHover: (e, els) => { if (els[0]) mhb(els[0].index); },
+        plugins: { ...B.plugins, barLabels: { fmt: v => n0(v) }, refLines: { lines: [{ v: wq, t: '', color: crit, dash: [] }, { v: avg3, t: '', color: ink2, dash: [5, 4] }, { v: max3, t: '', color: css('--serious'), dash: [2, 3] }] },
+          tooltip: { ...B.plugins.tooltip, callbacks: { title: c => HM[c[0].dataIndex] + (PARTIAL && c[0].dataIndex === HMN - 1 ? ` (1~${H.mtdDays}일)` : ''), label: c => ` 판매 ${n0(c.raw)}개 · 매출 ${won(Gm[c.dataIndex])}원` } } },
+        scales: { x: { ...B.scales.x, ticks: { ...B.scales.x.ticks, maxRotation: 0, autoSkip: false } }, y: { ...B.scales.y, beginAtZero: true, grace: '18%', ticks: { ...B.scales.y.ticks, callback: v => n0(v) } } },
+        datasets: { bar: { categoryPercentage: 0.84, barPercentage: 0.9 } } }) });
+    document.getElementById('cOpen').addEventListener('mouseleave', () => mhb(PARTIAL ? HMN - 1 : lf));
+    document.getElementById('openLegend').innerHTML = `<span><i class="sw" style="--c:var(--s1)"></i>판매량</span>${PARTIAL ? `<span><i class="sw" style="--c:var(--idle)"></i>${+curYM.slice(5)}월 (1~${H.mtdDays}일, 진행 중)</span>` : ''}<span class="muted">· 막대에 마우스를 올리면(모바일은 탭) 위 줄에 그 달 값</span>`;
+    el.querySelectorAll('.seg button').forEach(b => b.onclick = e => { e.stopPropagation(); state.mode = b.id.slice(5); renderPanel(k); });
+    const det = el.querySelector('#tDaily').closest('details'); det.querySelector('summary').textContent = '월별 표'; det.open = true; el.querySelector('#openLegend').after(det);   // 예시처럼 그래프 바로 아래에 월별 표
+    const R2 = [['판매량', i => n0(Q[i]), true], ['매출(만원)', i => n0(Gm[i] / 1e4)], ['PPM(%)', i => Gm[i] ? ((Gm[i] - Cm[i] * 1.1) / Gm[i] * 100).toFixed(1) : '–'],
+      ['평균 판매단가', i => Q[i] ? n0(Gm[i] / Q[i]) : '–'],
+      ['전년 동월 판매', i => { const j = lyI(i); return PARTIAL && i === HMN - 1 ? n0(hk.ly.q) : j >= 0 ? n0(Q[j]) : '–'; }],
+      ['판매량 YoY', i => { const j = lyI(i), l = PARTIAL && i === HMN - 1 ? hk.ly.q : (j >= 0 ? Q[j] : 0); return l ? `<span class="${Q[i] < l ? 'neg' : 'pos'}">${Q[i] >= l ? '+' : ''}${((Q[i] - l) / l * 100).toFixed(0)}%</span>` : '–'; }]];
+    document.getElementById('tDaily').innerHTML = `<thead><tr><th class="l stick"></th>${HM.map(ym => `<th>${ym.slice(2, 4)}.${+ym.slice(5)}${PARTIAL && ym === curYM ? '*' : ''}</th>`).join('')}</tr></thead><tbody>` +
+      R2.map(([l, f, bold]) => `<tr class="${bold ? 'tot' : ''}"><th class="l stick">${l}</th>${HM.map((_, i) => `<td>${f(i)}</td>`).join('')}</tr>`).join('') + '</tbody>';
+    const tw = document.getElementById('tDaily').closest('.tbl-wrap'); tw.scrollLeft = tw.scrollWidth;
+    return;
+  }
+
+  let cfg;
+  if (state.mode === 'qty') {
+    cfg = { type: 'bar', data: { labels, datasets: [bar('판매량', q, '--s1', true)] },
+      options: opts(yNum(v => n0(v)), [
+        { v: avg, t: `일평균 ${avg.toFixed(1)}`, color: crit, dash: [] },
+        { v: r7, t: `최근 7일 평균 ${r7.toFixed(1)}`, color: ink2, dash: [5, 4] },
+        { v: mx, t: `최대 ${n0(mx)}`, color: css('--serious'), dash: [2, 3] }], x => ` ${x.dataset.label} ${n0(x.raw)}개`) };
+    lgd([['판매량', '--s1']]);
+  } else if (state.mode === 'sales') {
+    const avgG = k.G / W;
+    cfg = { type: 'bar', data: { labels, datasets: [bar('매출', g, '--s1', true)] },
+      options: opts(yNum(v => won(v)), [{ v: avgG, t: `일평균 ${won(avgG)}`, color: crit, dash: [] }], x => ` ${x.dataset.label} ${won(x.raw)}원`, { fmt: v => won(v) }) };
+    lgd([['매출', '--s1']]);
+  } else if (state.mode === 'ppm') {
+    const o = opts({ ...B.scales.y, ticks: { ...B.scales.y.ticks, callback: v => v + '%' } },
+      isFinite(k.ppm) ? [{ v: k.ppm * 100, t: `기간 PPM ${pct(k.ppm)}`, color: crit, dash: [5, 4] }] : [], x => x.raw == null ? ' 판매 없음' : ` PPM ${x.raw.toFixed(1)}%`, { fmt: v => v.toFixed(1) + '%' });
+    o.scales.x = { ...xs, stacked: false };
+    cfg = { type: 'line', data: { labels, datasets: [{ label: 'PPM', data: ppmD, borderColor: css('--s3'), backgroundColor: css('--s3'), borderWidth: 2, tension: 0.2, spanGaps: true, pointRadius: 3, pointHoverRadius: 5 }] }, options: o };
+    lgd([['일별 PPM', '--s3']]);
+  } else {
+    const pad = a => showFuture ? [...a, ...Array(F).fill(null)] : a;
+    const ds = CG.map((x, j) => bar(x.l, pad(S(k[x.k])), x.c, j === CG.length - 1));
+    if (showFuture) {
+      ds.push({ label: '입고 예정', data: [...Array(W).fill(null), ...arrive.map(v => v || null)], backgroundColor: css('--s7'), stack: 's', borderRadius: { topLeft: 3, topRight: 3 }, borderSkipped: false });
+      ds.push({ type: 'line', label: '예상 재고', data: [...Array(W - 1).fill(null), k.stock, ...proj], stack: 'proj', borderColor: ink2, borderDash: [5, 4], borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: 0, spanGaps: false });
+    }
+    const safe = k.avg30 * 7;
+    cfg = { type: 'bar', data: { labels, datasets: ds },
+      options: opts(yNum(v => n0(v)), safe ? [{ v: safe, t: `7일분 재고 ${n0(safe)}`, color: crit, dash: [5, 4] }] : [],
+        x => ` ${x.dataset.label} ${n0(x.raw)}개`, { futureBand: showFuture ? { from: W } : {} }) };
+    cfg.options.plugins.tooltip.callbacks.footer = it => { const j = it[0].dataIndex; if (j >= W) return ''; const i = idx[j]; return `합계 ${n0(k.st[i])}개 · 입고 ${n0(k.inq[i])} · 출고 ${n0(k.out[i])}`; };
+    lgd([...CG.map(x => [x.l, x.c]), ...(showFuture ? [['입고 예정 (발주)', '--s7'], ['예상 재고', [ink2, 'dashed'], 'line']] : [])]);
+  }
+  cfg.plugins = [futureBand, barLabels, ...(state.mode === 'stock' ? [] : [soMarks])];
+  mk('cOpen', cfg);
+  document.getElementById('cOpen').addEventListener('mouseleave', () => hb(W - 1));
+  el.querySelectorAll('.seg button').forEach(b => b.onclick = e => { e.stopPropagation(); state.mode = b.id.slice(5); renderPanel(k); });
+
+  const R = [
+    ['판매량', i => n0(k.q[i])], ['매출(만원)', i => n0(k.g[i] / 1e4)], ['평균 판매단가', i => k.q[i] ? n0(k.g[i] / k.q[i]) : '–'],
+    ['PPM', (i, j) => ppmD[j] == null ? '–' : `<span class="${ppmD[j] < 0 ? 'neg' : ''}">${ppmD[j].toFixed(1)}</span>`],
+    ['조회수', i => n0(k.v[i])], ['주문', i => n0(k.o[i])], ['반품', i => k.r[i] ? n0(Math.abs(k.r[i])) : '·'],
+    ['재고', i => k.st[i] == null ? '–' : n0(k.st[i])], ['입고', i => k.inq[i] ? n0(k.inq[i]) : '·'],
+    ['품절', i => k.so[i] ? '<i class="sw round" style="--c:var(--crit)"></i>' : '·']
+  ];
+  document.getElementById('tDaily').innerHTML =
+    `<thead><tr><th class="l stick"></th>${wDays.map(d => `<th class="${'토일'.includes(wd(d)) ? 'we' : ''}">${md(d)}<span class="thsub">${wd(d)}</span></th>`).join('')}</tr></thead><tbody>` +
+    R.map(([l, f]) => `<tr><th class="l stick">${l}</th>${idx.map((i, j) => `<td class="${k.so[i] ? 'sod' : ''}">${f(i, j)}</td>`).join('')}</tr>`).join('') + '</tbody>';
+}
+
+
+/* ================= 추이·YoY ================= */
+const H = DATA.hist;
+const HM = H ? H.months : [], HMN = HM.length;
+const HMAP = new Map(H ? H.skus.map(k => [k.id, k]) : []);
+const curYM = ASOF.slice(0, 7);
+const daysInMonth = ym => new Date(+ym.slice(0, 4), +ym.slice(5, 7), 0).getDate();
+const PARTIAL = H && HM[HMN - 1] === curYM && H.mtdDays < daysInMonth(curYM);
+const LASTFULL = PARTIAL ? HMN - 2 : HMN - 1;
+const mIdx = ym => HM.indexOf(ym);
+const lyOf = ym => `${+ym.slice(0, 4) - 1}${ym.slice(4)}`;
+const ymLabel = ym => `${ym.slice(2, 4)}.${+ym.slice(5, 7)}`;
+state.yper = 'd1';   // 처음 열면 당일
+state.ym = 'g';
+const YF = ['g', 'q', 'r', 'c', 'p', 'o', 'v'];
+
+// 비교 기간 정의: 이번 기간 월 인덱스 목록 + 부분월 포함 여부
+function yPeriods() {
+  if (!H) return [];
+  const P = [], lf = HM[LASTFULL], hasLY = i => mIdx(lyOf(HM[i])) >= 0;
+  const lyNote = idx => idx.every(hasLY) ? '' : idx.some(hasLY) ? ' · 전년 자료가 없는 달은 비교에서 빠짐' : ' · 전년 자료 없음 (24년 6월 이전 자료 없음)';
+  // 기간 묶음
+  { const di = DAYS.length - 1, lyd = `${+ASOF.slice(0, 4) - 1}${ASOF.slice(4)}`, lj = DAYS.indexOf(lyd);
+    P.push({ id: 'd1', quick: true, grp: '기간', label: `당일 (${md(ASOF)})`, months: [], day: [di, lj],
+      desc: `${ASOF} (${wd(ASOF)}) vs 작년 같은 날 ${lyd} (${lj >= 0 ? wd(lyd) : '자료 없음'})` }); }
+  if (PARTIAL) P.push({ id: 'mtd', quick: true, grp: '기간', label: `당월 (${+curYM.slice(5)}/1~${H.mtdDays})`, months: [], mtd: true,
+    desc: `${curYM.replace('-', '년 ')}월 1~${H.mtdDays}일 vs 작년 같은 날짜 (${H.lyStart} ~ ${H.lyEnd})` });
+  if (LASTFULL >= 2) { const q = [LASTFULL - 2, LASTFULL - 1, LASTFULL];
+    P.push({ id: 'q3', grp: '기간', label: '최근 3개월', months: q,
+      desc: `${ymLabel(HM[q[0]])}~${ymLabel(lf)} vs ${ymLabel(lyOf(HM[q[0]]))}~${ymLabel(lyOf(lf))}` + lyNote(q) }); }
+  // 연도별: 올해는 누적, 지난해는 그 해 전체(자료 있는 달)
+  const years = [...new Set(HM.map(m => m.slice(0, 4)))].reverse();
+  years.forEach(y => {
+    const idx = HM.map((m, i) => m.startsWith(y) && i <= LASTFULL ? i : -1).filter(i => i >= 0);
+    const cur = y === curYM.slice(0, 4);
+    if (cur) P.push({ id: 'ytd', quick: true, grp: '연도', label: `올해 (${y.slice(2)}년)`, months: idx, mtd: PARTIAL,
+      desc: `${y}년 1월 1일 ~ ${ASOF} vs ${+y - 1}년 1월 1일 ~ ${H.lyEnd}` + lyNote(idx) });
+    else if (idx.length) {
+      const rng = ix => ix.length < 12 ? ` (${+HM[ix[0]].slice(5)}~${+HM[ix[ix.length - 1]].slice(5)}월)` : '';
+      const cmp = idx.filter(hasLY);
+      if (cmp.length && cmp.length < idx.length)   // 전년 자료가 일부만 있으면 비교 가능한 달끼리만
+        P.push({ id: 'y' + y, grp: '연도', label: `${y.slice(2)}년${rng(cmp)}`, months: cmp,
+          desc: `${y}년${rng(cmp)} vs ${+y - 1}년${rng(cmp)} · 나머지 달은 전년 자료가 없어 제외` });
+      else P.push({ id: 'y' + y, grp: '연도', label: `${y.slice(2)}년${rng(idx)}`, months: idx, desc: `${y}년${rng(idx)} vs ${+y - 1}년 같은 달` + lyNote(idx) });
+    }
+  });
+  // 월별: 최근 달부터 24년 첫 달까지
+  for (let i = LASTFULL; i >= 0; i--) {
+    P.push({ id: 'm' + HM[i], grp: '월별', label: `${HM[i].slice(2, 4)}년 ${+HM[i].slice(5)}월`, months: [i],
+      desc: `${HM[i].replace('-', '년 ')}월 vs ${lyOf(HM[i]).replace('-', '년 ')}월` + lyNote([i]) });
+  }
+  return P;
+}
+const YPER = yPeriods();
+// SKU 하나의 [이번, 작년] 합계
+const DSKU = new Map(DATA.skus.map(k => [k.id, k]));
+function perVal(k, f, per) {
+  if (per.day) { const d = DSKU.get(k.id); if (!d || !d[f]) return [0, 0]; return [d[f][per.day[0]] || 0, per.day[1] >= 0 ? d[f][per.day[1]] || 0 : 0]; }
+  let cur = 0, ly = 0;
+  per.months.forEach(i => { cur += k[f][i]; const j = mIdx(lyOf(HM[i])); if (j >= 0) ly += k[f][j]; });
+  if (per.mtd) { cur += k[f][HMN - 1]; ly += k.ly[f]; }
+  return [cur, ly];
+}
+function hList() {
+  if (!H) return [];
+  return H.skus.filter(k => (state.grp === '전체' || k.grp === state.grp) && (state.brand === '전체' || k.brand === state.brand));
+}
+const yoyTxt = (c, l) => l ? `<span class="${c < l ? 'neg' : 'pos'}">${c >= l ? '+' : ''}${((c - l) / l * 100).toFixed(1)}%</span>` : (c ? '<span class="muted">신규</span>' : '–');
+const ppTxt = d => isFinite(d) ? `<span class="${d < 0 ? 'neg' : 'pos'}">${d >= 0 ? '+' : ''}${(d * 100).toFixed(1)}%p</span>` : '–';
+const mval = v => state.ym === 'g' ? won(v) : n0(v);
+const munit = () => state.ym === 'g' ? '원' : '개';
+
+if (H) {
+  const yc = document.getElementById('yPerChips');
+  YPER.filter(p => p.quick).forEach(p => { const b = document.createElement('button'); b.className = 'chip'; b.id = 'yp-' + p.id; b.textContent = p.label;
+    b.onclick = () => { state.yper = p.id; renderYoy(list()); }; yc.appendChild(b); });
+  const ys = document.createElement('select'); ys.id = 'yPerSel'; ys.className = 'pastsel'; ys.setAttribute('aria-label', '지난 기간 선택');
+  ys.innerHTML = '<option value="">지난 기간 ▾</option>' + [...new Set(YPER.filter(p => !p.quick).map(p => p.grp))].map(g => `<optgroup label="${g}">${YPER.filter(p => !p.quick && p.grp === g).map(p => `<option value="${p.id}">${p.label}</option>`).join('')}</optgroup>`).join('');
+  ys.onchange = () => { if (!ys.value) return; state.yper = ys.value; renderYoy(list()); };
+  yc.appendChild(ys);
+  document.querySelectorAll('#yMetric button').forEach(b => b.onclick = () => { state.ym = b.id.slice(3); renderYoy(list()); });
+}
+
+
+/* ---- 추이·YoY: 전체 SKU YoY 표 ---- */
+state.yaSort = { key: 'gc', dir: -1 }; state.yaq = '';
+const YACOLS = [
+  { key: null, lab: 'SKU', l: true },
+  { key: 'gc', lab: '매출' }, { key: 'gl', lab: '전년 매출' }, { key: 'dg', lab: '증감액' }, { key: 'yg', lab: '매출 YoY' },
+  { key: 'qc', lab: '판매량' }, { key: 'ql', lab: '전년 판매량' }, { key: 'yq', lab: '판매량 YoY' },
+  { key: 'pc', lab: 'PPM' }, { key: 'dp', lab: 'PPM 변화' }
+];
+function renderYoyAll() {
+  if (!H) return;
+  const per = YPER.find(p => p.id === state.yper) || YPER[YPER.length - 1], q = state.yaq.toLowerCase();
+  const rows = hList().map(k => {
+    const [gc, gl] = perVal(k, 'g', per), [qc, ql] = perVal(k, 'q', per), [cc, cl] = perVal(k, 'c', per);
+    const pc = gc ? (gc - cc * 1.1) / gc : null, pl = gl ? (gl - cl * 1.1) / gl : null;
+    return { k, gc, gl, dg: gc - gl, yg: gl ? (gc - gl) / gl : null, qc, ql, yq: ql ? (qc - ql) / ql : null, pc, dp: pc != null && pl != null ? pc - pl : null };
+  }).filter(x => (x.gc || x.gl) && (!q || x.k.name.toLowerCase().includes(q) || String(x.k.id).includes(q) || x.k.cat.includes(q)));
+  const { key, dir } = state.yaSort;
+  const v = x => x[key] == null ? (dir < 0 ? -Infinity : Infinity) : x[key];
+  rows.sort((a, b) => dir * (v(a) - v(b)) || b.gc - a.gc);
+  document.getElementById('nYAll').textContent = rows.length + '개';
+  document.getElementById('yAllDesc').textContent = `${per.desc} · 열 제목을 누르면 정렬, 행을 누르면 SKU 상세가 열립니다. 10개가 넘으면 표 안에서 스크롤됩니다.`;
+  const t = document.getElementById('tYAll');
+  t.innerHTML = headRow(YACOLS, state.yaSort, 'data-i') + '<tbody>' + (rows.length ? rows.map(x => `<tr class="${x.k.cur ? 'click' : ''}" data-id="${x.k.id}" data-yoy="1">
+      <td class="l name">${esc(x.k.name)}<span class="cat">${esc(x.k.cat)} · ${x.k.id}${x.k.cur ? '' : ' · 판매 중단'}</span></td>
+      <td><b>${won(x.gc)}</b></td><td class="muted">${won(x.gl)}</td>
+      <td class="${x.dg < 0 ? 'neg' : 'pos'}">${x.dg > 0 ? '+' : ''}${won(x.dg)}</td><td>${yoyTxt(x.gc, x.gl)}</td>
+      <td>${n0(x.qc)}</td><td class="muted">${n0(x.ql)}</td><td>${yoyTxt(x.qc, x.ql)}</td>
+      <td>${x.pc == null ? '–' : pct(x.pc)}</td><td>${x.dp == null ? '–' : ppTxt(x.dp)}</td></tr>`).join('')
+    : `<tr><td class="l empty" colspan="${YACOLS.length}">조건에 맞는 SKU가 없습니다.</td></tr>`) + '</tbody>';
+  t.querySelectorAll('th.sortable').forEach(th => th.onclick = () => {
+    const c = YACOLS[+th.dataset.i];
+    state.yaSort = { key: c.key, dir: state.yaSort.key === c.key ? -state.yaSort.dir : -1 };
+    renderYoyAll();
+  });
+  fitScroll5();
+}
+if (H) document.getElementById('yaSearch').addEventListener('input', e => { state.yaq = e.target.value.trim(); renderYoyAll(); });
+
+function renderYoy() {
+  if (!H) return;
+  const L = hList(), per = YPER.find(p => p.id === state.yper) || YPER[YPER.length - 1], m = state.ym, B = baseOpts();
+  document.querySelectorAll('#yPerChips .chip').forEach(c => c.setAttribute('aria-pressed', c.id === 'yp-' + per.id));
+  const ysel = document.getElementById('yPerSel'); ysel.value = per.quick ? '' : per.id; ysel.classList.toggle('on', !per.quick);
+  document.querySelectorAll('#yMetric button').forEach(b => b.setAttribute('aria-pressed', b.id === 'ym-' + m));
+  document.getElementById('yPerDesc').textContent = `비교: ${per.desc} · 상단 카테고리·브랜드 필터가 적용됩니다.`;
+  document.getElementById('period').innerHTML = `기준일 <b>${ASOF} (${wd(ASOF)})</b> · 비교 기간 ${per.label}`;
+
+  // ---- KPI ----
+  const T = {}; YF.forEach(f => { T[f] = [0, 0]; L.forEach(k => { const [c, l] = perVal(k, f, per); T[f][0] += c; T[f][1] += l; }); });
+  const ppm = i => T.g[i] ? (T.g[i] - T.c[i] * 1.1) / T.g[i] : NaN;
+  const sk = i => L.filter(k => perVal(k, 'g', per)[i] > 0).length;
+  const chg = (c, l) => l ? `전년 ${won(l)} · <b class="${c < l ? 'neg' : 'pos'}">${c >= l ? '+' : ''}${((c - l) / l * 100).toFixed(1)}%</b>` : '전년 없음';
+  tiles('kpiYoy', [
+    { lab: `매출 · ${per.label}`, val: won(T.g[0]), unit: '원', sub: chg(T.g[0], T.g[1]) },
+    { lab: '판매수량', val: n0(T.q[0]), unit: '개', sub: T.q[1] ? `전년 ${n0(T.q[1])} · <b class="${T.q[0] < T.q[1] ? 'neg' : 'pos'}">${T.q[0] >= T.q[1] ? '+' : ''}${((T.q[0] - T.q[1]) / T.q[1] * 100).toFixed(1)}%</b>` : '' },
+    { lab: 'PPM', val: pct(ppm(0)), sub: `전년 ${pct(ppm(1))} · ${ppTxt(ppm(0) - ppm(1))}` },
+    { lab: '평균 판매가', val: n0(T.g[0] / T.q[0]), unit: '원', sub: `전년 ${n0(T.g[1] / T.q[1])}원 · ${yoyTxt(T.g[0] / T.q[0], T.g[1] / T.q[1])}` },
+    { lab: '판매 SKU 수', val: sk(0), unit: '개', sub: `전년 ${sk(1)}개 · 구매전환율 ${pct(T.o[0] / T.v[0])} (전년 ${pct(T.o[1] / T.v[1])})` }
+  ]);
+
+  // ---- 월별 합계 ----
+  const mt = YF.reduce((o, f) => (o[f] = HM.map((_, i) => sum(L.map(k => k[f][i]))), o), {});
+  const years = [...new Set(HM.map(x => x.slice(0, 4)))];
+  const YC = ['--s3', '--s2', '--s1'].slice(-years.length);   // 가장 최근 연도 = 파랑
+  // ---- 월별 실적표 ----
+  const rowsM = HM.map((ym, i) => i).reverse();
+  document.getElementById('tYMonth').innerHTML = `<thead><tr><th class="l">월</th><th>매출</th><th>전년 매출</th><th>YoY</th><th>판매량</th><th>YoY</th><th>PPM</th><th>PPM 변화</th><th>평균 판매가</th><th>판매 SKU</th></tr></thead><tbody>` +
+    rowsM.map(i => { const j = mIdx(lyOf(HM[i])), part = PARTIAL && i === HMN - 1;
+      const g = mt.g[i], q = mt.q[i], lg = part ? sum(L.map(k => k.ly.g)) : (j >= 0 ? mt.g[j] : null), lq = part ? sum(L.map(k => k.ly.q)) : (j >= 0 ? mt.q[j] : null);
+      const pp = g ? (g - mt.c[i] * 1.1) / g : NaN, lc = part ? sum(L.map(k => k.ly.c)) : (j >= 0 ? mt.c[j] : 0), lpp = lg ? (lg - lc * 1.1) / lg : NaN;
+      return `<tr><td class="l">${HM[i]}${part ? ` <span class="muted">(1~${H.mtdDays}일)</span>` : ''}</td><td>${won(g)}</td><td class="muted">${lg != null ? won(lg) : '–'}</td><td>${lg != null ? yoyTxt(g, lg) : '–'}</td>
+        <td>${n0(q)}</td><td>${lq != null ? yoyTxt(q, lq) : '–'}</td><td>${pct(pp)}</td><td>${lg ? ppTxt(pp - lpp) : '–'}</td><td>${q ? n0(g / q) : '–'}</td><td>${L.filter(k => k.g[i] > 0).length}</td></tr>`; }).join('') + '</tbody>';
+
+  // ---- SKU 순위 ----
+  const SV = L.map(k => { const [c, l] = perVal(k, m, per), [gc, gl] = perVal(k, 'g', per); return { k, c, l, d: c - l, gc, gl }; });
+  const skuTd = k => `<td class="l name">${esc(k.name)}<span class="cat">${esc(k.cat)} · ${k.id}</span></td>`;
+  const trS = (x, cells) => `<tr class="${x.k.cur ? 'click' : ''}" data-id="${x.k.id}" data-yoy="1">${skuTd(x.k)}${cells}</tr>`;
+  const hdr = `${m === 'g' ? '매출' : '판매량'}`;
+  smallTable('tYUp', 'nYUp', ['SKU', hdr, '전년', '증감', 'YoY'], SV.filter(x => x.l > 0 && x.d > 0).sort((a, b) => b.d - a.d).map(x => trS(x, `<td>${mval(x.c)}</td><td class="muted">${mval(x.l)}</td><td class="pos">+${mval(x.d)}</td><td>${yoyTxt(x.c, x.l)}</td>`)), '증가한 SKU가 없습니다.');
+  smallTable('tYDown', 'nYDown', ['SKU', hdr, '전년', '증감', 'YoY'], SV.filter(x => x.c > 0 && x.d < 0).sort((a, b) => a.d - b.d).map(x => trS(x, `<td>${mval(x.c)}</td><td class="muted">${mval(x.l)}</td><td class="neg">${mval(x.d)}</td><td>${yoyTxt(x.c, x.l)}</td>`)), '감소한 SKU가 없습니다.');
+
+  // ---- 시즌성 (가장 최근 완전한 1년) ----
+  const fullYears = years.filter(y => [...Array(12).keys()].every(mm => { const i = mIdx(`${y}-${String(mm + 1).padStart(2, '0')}`); return i >= 0 && i <= LASTFULL; }));
+  const sy = fullYears[fullYears.length - 1];
+  const sEl = document.getElementById('tYSeason');
+  if (!sy) { sEl.innerHTML = '<tbody><tr><td class="l empty">12개월이 모두 있는 해가 아직 없습니다.</td></tr></tbody>'; }
+  else {
+    document.getElementById('ySeasonDesc').textContent = `${sy}년 ${m === 'g' ? '매출' : '판매량'} 기준. 월 일평균 ÷ 연간 일평균 × 100 (100보다 크면 평소보다 잘 팔리는 달). 연 매출 상위 세부카테고리 순.`;
+    const mi12 = [...Array(12).keys()].map(mm => mIdx(`${sy}-${String(mm + 1).padStart(2, '0')}`));
+    const idxRow = arr => { const dly = mi12.map((i, mm) => arr[i] / daysInMonth(HM[i])); const avg = sum(dly) / 12; return avg ? dly.map(v => v / avg * 100) : null; };
+    const rowsS = [{ name: '전체', arr: mi12.map(() => 0), bold: true }];
+    const byCat = {};
+    L.forEach(k => { const o = byCat[k.cat] ||= { name: k.cat, grp: k.grp, arr: Array(HMN).fill(0) }; k[m].forEach((v, i) => o.arr[i] += v); });
+    const cr = Object.values(byCat).map(o => ({ ...o, tot: sum(mi12.map(i => o.arr[i])) })).filter(o => o.tot > 0).sort((a, b) => b.tot - a.tot).slice(0, 12);
+    const all = Array(HMN).fill(0); L.forEach(k => k[m].forEach((v, i) => all[i] += v));
+    const rows = [{ name: '전체', arr: all, bold: true }, ...cr];
+    sEl.innerHTML = `<thead><tr><th class="l">${sy}년</th>${[...Array(12).keys()].map(i => `<th>${i + 1}월</th>`).join('')}</tr></thead><tbody>` +
+      rows.map(r => { const ix = idxRow(r.arr); if (!ix) return '';
+        return `<tr><td class="l">${r.grp ? `<span class="pill" style="--pc:var(${GRPC[r.grp]})">${esc(r.name)}</span>` : `<b>${r.name}</b>`}</td>${ix.map(v => {
+          const a = Math.max(0, Math.min(1, (v - 60) / 120)); return `<td style="background:color-mix(in srgb, var(--s1) ${Math.round(a * 70)}%, transparent);${v >= 130 ? 'font-weight:700' : ''}">${Math.round(v)}</td>`; }).join('')}</tr>`; }).join('') + '</tbody>';
+  }
+
+  renderYoyAll();
+  fitScroll5();
+}
+
+/* ---------- 행 클릭: 지금 탭 위에 SKU 상세 패널 열기·닫기 ---------- */
+const drawer = document.getElementById('drawer');
+function openDrawer(id) {
+  const k = DATA.skus.find(x => x.id === id); if (!k) return;
+  state.drawer = id;
+  document.getElementById('drawerTitle').innerHTML = `${pill(k.bucket)} <span class="muted">${k.id}</span>`;
+  if (drawer.hidden) state.drawerY = window.scrollY;   // 닫을 때 보던 위치로 돌아가기
+  drawer.hidden = false; document.body.style.overflow = 'hidden';
+  renderPanel(k);
+  document.getElementById('drawerBody').scrollTop = 0;
+  document.getElementById('drawerClose').focus({ preventScroll: true });
+}
+function closeDrawer() {
+  if (state.drawer == null) return;
+  state.drawer = null; drawer.hidden = true; document.body.style.overflow = '';
+  if (state.drawerY != null) window.scrollTo(0, state.drawerY);
+  document.getElementById('dpanel2').innerHTML = '';
+}
+document.getElementById('drawerClose').onclick = closeDrawer;
+drawer.querySelector('.drawer-back').onclick = closeDrawer;
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+document.addEventListener('click', e => {
+  const tr = e.target.closest('tr.click'); if (!tr || tr.closest('#drawer')) return;
+  const id = +tr.dataset.id;
+  if (tr.dataset.yoy) state.mode = 'yoy';
+  openDrawer(id);
+});
+
+function renderAll() {
+  document.querySelectorAll('#winChips .chip').forEach(c => c.setAttribute('aria-pressed', c.id === 'win-' + state.win));
+  const ws = document.getElementById('winSel'); ws.value = WINS.find(w => w.id === state.win && !w.quick) ? state.win : ''; ws.classList.toggle('on', !!ws.value);
+  document.querySelectorAll('#grpChips .chip').forEach(c => c.setAttribute('aria-pressed', c.textContent === state.grp));
+  bs.value = state.brand;
+  document.getElementById('period').innerHTML = `기준일 <b>${ASOF} (${wd(ASOF)})</b> · 선택 기간 ${(d => d.slice(0, 4) === ASOF.slice(0, 4) ? md(d) : `${d.slice(2, 4)}년 ${md(d)}`)(DAYS[state.i0])}~${md(DAYS[state.i1])} (${state.W}일)`;
+  const L = list();
+  if (state.tab === 'sales') renderSales(L);
+  if (state.tab === 'stock') renderStock(L);
+  if (state.tab === 'yoy') renderYoy(L);
+  if (state.drawer != null) { const k = DATA.skus.find(x => x.id === state.drawer); if (k) renderPanel(k); }
+}
+const rerender = () => requestAnimationFrame(renderAll);
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', rerender); } catch (e) {}
+new MutationObserver(rerender).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+applyWindow();
+initSalesFilters();
+const h = (location.hash || '').slice(1);
+setTab(['sales', 'stock', 'yoy'].includes(h) ? h : 'sales', false);
+})();
+</script>
