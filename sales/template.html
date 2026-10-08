@@ -947,12 +947,14 @@ const poByToday = list => [...list].sort((a, b) => { const da = dayDiff(TODAY, a
 function renderPanel(k) {
   const el = document.getElementById('dpanel2');
   if (!el) return;
-  const { i0, W } = state, idx = [...Array(W).keys()].map(j => i0 + j), wDays = idx.map(i => DAYS[i]);
+  const W = Math.min(15, N), i0 = N - W, idx = [...Array(W).keys()].map(j => i0 + j), wDays = idx.map(i => DAYS[i]);   // 일별 화면: 최근 15일
   PANEL = { k, i0, W };
   const S = a => idx.map(i => a[i]);
   const g = S(k.g), q = S(k.q), c = S(k.c), p = S(k.p), pq = S(k.pq);
   const ppmD = g.map((x, j) => x ? (x - c[j] * 1.1) / x * 100 : null);
-  const avg = k.Q / W, mx = Math.max(...q), mxi = q.indexOf(mx);
+  const Qp = sum(q), Gp = sum(g), Cp = sum(c), Rp = sum(S(k.r)), Op = sum(S(k.o)), Vp = sum(S(k.v)), SOp = sum(S(k.so));
+  const ppmP = Gp ? (Gp - Cp * 1.1) / Gp : NaN;
+  const avg = Qp / W, mx = Math.max(...q), mxi = q.indexOf(mx);
   const r7 = sum(k.q.slice(-7)) / Math.min(7, N), p7 = N >= 14 ? sum(k.q.slice(-14, -7)) / 7 : NaN;
   const chg = p7 ? (r7 - p7) / p7 : NaN;
   const modes = [...(HMAP.has(k.id) ? [['yoy', '월별 추이']] : []), ['qty', '일별 판매량'], ['sales', '일별 매출'], ['ppm', '일별 PPM'], ['stock', '재고·입고']];
@@ -964,16 +966,16 @@ function renderPanel(k) {
   const fDays = [...Array(F).keys()].map(j => addDays(ASOF, j + 1));
   const arrive = fDays.map(d => sum(k.pending.filter(x => x.q > 0 && x.arr === d).map(x => x.q)));
   let s0 = k.stock || 0; const proj = fDays.map((_, j) => (s0 = Math.max(0, s0 - k.avg30 + arrive[j])));
-  const showFuture = state.mode === 'stock' && F > 0 && state.i1 === N - 1;
+  const showFuture = state.mode === 'stock' && F > 0;
 
   el.innerHTML = `
     <div class="dp-head">
-      <h3>${esc(k.name)} · 일별 추이 <span class="note">${state.wLabel}</span></h3>
+      <h3>${esc(k.name)} · 일별 추이 <span class="note">최근 ${W}일 (${md(DAYS[i0])}~${md(ASOF)})</span></h3>
       <div class="seg" role="group" aria-label="그래프 선택">${modes.map(([m, l]) => `<button id="mode-${m}" aria-pressed="${state.mode === m}">${l}</button>`).join('')}</div>
     </div>
-    <p class="dp-sum">기간 합계 <b>${n0(k.Q)}개</b> · 매출 <b>${won(k.G)}원</b> · 평균 판매단가 <b>${k.Q ? n0(k.G / k.Q) + '원' : '–'}</b> · 일평균 <b>${avg.toFixed(1)}</b> · 최대 <b>${n0(mx)}</b>${mx ? ` (${md(wDays[mxi])})` : ''}
+    <p class="dp-sum">15일 합계 <b>${n0(Qp)}개</b> · 매출 <b>${won(Gp)}원</b> · 평균 판매단가 <b>${Qp ? n0(Gp / Qp) + '원' : '–'}</b> · 일평균 <b>${avg.toFixed(1)}</b> · 최대 <b>${n0(mx)}</b>${mx ? ` (${md(wDays[mxi])})` : ''}
       · 최근 7일 평균 <b>${r7.toFixed(1)}</b> ${isFinite(chg) ? `(직전 7일 대비 <b class="${chg < 0 ? 'down' : 'up'}">${chg > 0 ? '+' : ''}${(chg * 100).toFixed(0)}%</b>)` : ''}
-      · PPM <b>${pct(k.ppm)}</b> · 전환율 <b>${pct(k.cvr)}</b> · 반품률 <b>${pct(k.ret)}</b> · 품절 <b>${k.soDays}일</b> · 발주상태 <b>${esc(k.status)}</b>
+      · PPM <b>${pct(ppmP)}</b> · 전환율 <b>${pct(Vp ? Op / Vp : NaN)}</b> · 반품률 <b>${pct(Qp ? Rp / Qp : NaN)}</b> · 품절 <b>${SOp}일</b> · 발주상태 <b>${esc(k.status)}</b>
       ${k.pend ? `<br>입고 대기 <b>${n0(k.pend)}개</b> (${won(k.pendAmt)}원) · 첫 입고 <b>${md(k.firstEta)}</b>${k.lateN ? ` · <b class="down">지연 ${k.lateN}건</b>` : ''} · 예상 소진 <b>${k.runout ? md(k.runout) : docTxt(k.doc)}</b> → 발주 반영 <b>${k.runoutPO ? md(k.runoutPO) : docTxt(k.docPO)}</b>${k.gap > 0 && isFinite(k.gap) ? ` · <b class="down">입고 전 ${k.gap}일 공백</b>` : ''}` : ''}</p>
     <div class="hoverbox" id="hb"></div>
     <div class="chart"><canvas id="cOpen"></canvas></div>
@@ -1086,15 +1088,15 @@ function renderPanel(k) {
         { v: mx, t: `최대 ${n0(mx)}`, color: css('--serious'), dash: [2, 3] }], x => ` ${x.dataset.label} ${n0(x.raw)}개`) };
     lgd([['판매량', '--s1']]);
   } else if (state.mode === 'sales') {
-    const avgG = k.G / W;
+    const avgG = Gp / W;
     cfg = { type: 'bar', data: { labels, datasets: [bar('매출', g, '--s1', true)] },
       options: opts(yNum(v => won(v)), [{ v: avgG, t: `일평균 ${won(avgG)}`, color: crit, dash: [] }], x => ` ${x.dataset.label} ${won(x.raw)}원`, { fmt: v => won(v) }) };
     lgd([['매출', '--s1']]);
   } else if (state.mode === 'ppm') {
     const o = opts({ ...B.scales.y, ticks: { ...B.scales.y.ticks, callback: v => v + '%' } },
-      isFinite(k.ppm) ? [{ v: k.ppm * 100, t: `기간 PPM ${pct(k.ppm)}`, color: crit, dash: [5, 4] }] : [], x => x.raw == null ? ' 판매 없음' : ` PPM ${x.raw.toFixed(1)}%`, { fmt: v => v.toFixed(1) + '%' });
+      isFinite(ppmP) ? [{ v: ppmP * 100, t: `15일 PPM ${pct(ppmP)}`, color: crit, dash: [5, 4] }] : [], x => x.raw == null ? ' 판매 없음' : ` PPM ${x.raw.toFixed(1)}%`, { fmt: v => v.toFixed(1) + '%' });
     o.scales.x = { ...xs, stacked: false };
-    cfg = { type: 'line', data: { labels, datasets: [{ label: 'PPM', data: ppmD, borderColor: css('--s3'), backgroundColor: css('--s3'), borderWidth: 2, tension: 0.2, spanGaps: true, pointRadius: 3, pointHoverRadius: 5 }] }, options: o };
+    cfg = { type: 'bar', data: { labels, datasets: [{ label: 'PPM', data: ppmD, backgroundColor: ppmD.map(v => css(v != null && v < 0 ? '--crit' : '--s3')), borderRadius: 3, borderSkipped: false }] }, options: o };
     lgd([['일별 PPM', '--s3']]);
   } else {
     const pad = a => showFuture ? [...a, ...Array(F).fill(null)] : a;
