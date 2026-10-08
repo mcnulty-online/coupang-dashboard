@@ -804,23 +804,30 @@ function initSalesFilters() {
   document.getElementById('sfReset').onclick = () => { state.sf = { q: '', cat: '', st: '', po: '', sale: '' };
     ['sfQ', 'sfCat', 'sfSt', 'sfPo', 'sfSale'].forEach(id => document.getElementById(id).value = ''); renderSalesTable(list()); };
 }
+const STOCK_KEYS = ['stock', 'doc', 'pend', 'docPOs'];
 function renderSalesTable(L) {
   const f = state.sf, q = f.q.toLowerCase();
+  // 재고 관련 열·필터는 '당일'에서만 (재고는 기준일 하루 값이라 기간 합계와 섞이면 의미가 없음)
+  const showStock = state.win === 'd1';
+  ['sfSt', 'sfPo', 'stLegSales'].forEach(id => document.getElementById(id).hidden = !showStock);
+  const fst = showStock ? f.st : '', fpo = showStock ? f.po : '';
+  const COLS = showStock ? SCOLS2 : SCOLS2.filter(c => !STOCK_KEYS.includes(c.key));
+  if (!showStock && STOCK_KEYS.includes(state.sSort.key)) state.sSort = { key: 'G', dir: -1 };
   const rows = L.filter(k => (!q || k.name.toLowerCase().includes(q) || String(k.id).includes(q)) && (!f.cat || k.cat === f.cat) &&
-    (!f.st || k.bucket.key === f.st) && (!f.po || (f.po === 'y') === (k.pend > 0)) && (!f.sale || (f.sale === 'y') === (k.G > 0))).sort(sorter(state.sSort));
-  renderStLegend('stLegSales', L, f.st, v => { state.sf.st = v; document.getElementById('sfSt').value = v; renderSalesTable(list()); });
+    (!fst || k.bucket.key === fst) && (!fpo || (fpo === 'y') === (k.pend > 0)) && (!f.sale || (f.sale === 'y') === (k.G > 0))).sort(sorter(state.sSort));
+  if (showStock) renderStLegend('stLegSales', L, f.st, v => { state.sf.st = v; document.getElementById('sfSt').value = v; renderSalesTable(list()); });
   document.getElementById('nSales').textContent = `${rows.length}개${rows.length !== L.length ? ` / 전체 ${L.length}개` : ''}`;
   const t = document.getElementById('tTop');
-  t.innerHTML = headRow(SCOLS2, state.sSort, 'data-i') + '<tbody>' + (rows.length ? rows.map((k, i) => `<tr class="click" data-id="${k.id}">
+  t.innerHTML = headRow(COLS, state.sSort, 'data-i') + '<tbody>' + (rows.length ? rows.map((k, i) => `<tr class="click" data-id="${k.id}">
       <td class="l muted">${i + 1}</td>${skuCell(k)}
       <td><b>${won(k.G)}</b></td>
       <td>${n0(k.Q)}</td><td>${k.avgQ.toFixed(1)}</td>
       <td class="${k.ppm < 0 ? 'neg' : ''}">${pct(k.ppm)}</td><td>${k.PMC ? won(k.PMC) : '–'}</td>
-      <td>${k.stock == null ? '–' : n0(k.stock)}</td><td>${pill(k.bucket, docTxt(k.doc))}</td><td>${etaTxt(k)}</td>
-      <td>${k.pend ? pill(k.bucketPO, docTxt(k.docPO)) : '<span class="muted">–</span>'}</td></tr>`).join('')
-    : `<tr><td class="l empty" colspan="${SCOLS2.length}">조건에 맞는 SKU가 없습니다.</td></tr>`) + '</tbody>';
+      ${showStock ? `<td>${k.stock == null ? '–' : n0(k.stock)}</td><td>${pill(k.bucket, docTxt(k.doc))}</td><td>${etaTxt(k)}</td>
+      <td>${k.pend ? pill(k.bucketPO, docTxt(k.docPO)) : '<span class="muted">–</span>'}</td>` : ''}</tr>`).join('')
+    : `<tr><td class="l empty" colspan="${COLS.length}">조건에 맞는 SKU가 없습니다.</td></tr>`) + '</tbody>';
   t.querySelectorAll('th.sortable').forEach(th => th.onclick = () => {
-    const c = SCOLS2[+th.dataset.i];
+    const c = COLS[+th.dataset.i];
     state.sSort = { key: c.key, dir: state.sSort.key === c.key ? -state.sSort.dir : (['doc', 'docPOs'].includes(c.key) ? 1 : -1) };
     renderSalesTable(list());
   });
