@@ -243,6 +243,10 @@ table.heat td.l { text-align: left; }
 .stlegend .pill { margin-left: 6px; }
 .stlegend .flabel { margin-right: 2px; }
 .kgroup.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.kgroup.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.kgroup.five .kval { font-size: 21px; }
+@media (max-width: 1100px) { .kgroup.five { grid-template-columns: repeat(3, minmax(0, 1fr)); } .kgroup.five .kcell:nth-child(4) { border-left: 0; } .kgroup.five .kcell:nth-child(n+4) { border-top: 1px solid var(--grid); } }
+@media (max-width: 700px) { .kgroup.five { grid-template-columns: repeat(2, minmax(0, 1fr)); } .kgroup.five .kcell { border-left: 0; border-top: 1px solid var(--grid); } .kgroup.five .kcell:nth-child(-n+2) { border-top: 0; } .kgroup.five .kcell:nth-child(2n) { border-left: 1px solid var(--grid); } .kgroup.five .kval { font-size: 18px; } }
 @media (max-width: 900px) { .kgroup.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } .kgroup.four .kcell:nth-child(3) { border-left: 0; } .kgroup.four .kcell:nth-child(n+3) { border-top: 1px solid var(--grid); } }
 .ksub .pmcr { display: block; margin-top: 2px; }
 .ksub b.neutral { color: var(--ink-2); }
@@ -702,7 +706,9 @@ function renderSales(L) {
   // ---- 매출·PPM 카드 (총 / 커피·차 / 음료) — 카테고리 필터와 무관하게 브랜드 필터만 적용 ----
   const LB = DATA.skus.filter(k => state.brand === '전체' || k.brand === state.brand);
   const rng = (k, f, a, b) => { let s = 0; for (let i = a; i <= b; i++) s += k[f][i]; return s; };
-  const agg = (grpName, a, b) => { const S = LB.filter(k => !grpName || k.grp === grpName); return { g: sum(S.map(k => rng(k, 'g', a, b))), c: sum(S.map(k => rng(k, 'c', a, b))) }; };
+  // 별도 관리 원두: 커피/차 매출·PPM에서 빼고 따로 표시 (SKU ID 목록은 여기서 관리)
+  const SEP_BEANS = [80661387, 80686777, 80855135, 80855134, 80855137];
+  const agg = (grpName, a, b) => { const S = LB.filter(k => !grpName || (k.grp === grpName && !(grpName === '커피' && SEP_BEANS.includes(k.id)))); return { g: sum(S.map(k => rng(k, 'g', a, b))), c: sum(S.map(k => rng(k, 'c', a, b))) }; };
   const cmpLabel = state.win === 'd1' ? '어제' : state.prevLabel;
   const parts = [[null, '총 매출액(GMV)', '통합 PPM'], ['커피', '커피/차 매출액(GMV)', '커피/차 PPM'], ['음료', '음료 매출액(GMV)', '음료 PPM']].map(([gname, lg, lp]) => {
     const cur = agg(gname, state.i0, state.i1), prv = pr && pr[0] >= 0 ? agg(gname, pr[0], pr[1]) : null;
@@ -712,6 +718,8 @@ function renderSales(L) {
   // 기타 = 하위카테고리 Kitchen Appliance + Tools & Gadgets (커피머신·드립주전자·커피필터 등)
   const ETC_SUB = ['Kitchen Appliance', 'Tools & Gadgets'];
   const aggSub = (a, b) => { const S = LB.filter(k => ETC_SUB.includes(k.sub)); return { g: sum(S.map(k => rng(k, 'g', a, b))) }; };
+  const aggSep = (a, b) => { const S = LB.filter(k => SEP_BEANS.includes(k.id)); return { g: sum(S.map(k => rng(k, 'g', a, b))) }; };
+  const sepPart = { lg: '별도 관리 원두 매출액(GMV)', cur: aggSep(state.i0, state.i1), prv: pr && pr[0] >= 0 ? aggSep(pr[0], pr[1]) : null };
   const etcPart = { lg: '기타 매출액(GMV)', cur: aggSub(state.i0, state.i1), prv: pr && pr[0] >= 0 ? aggSub(pr[0], pr[1]) : null };
   const arrow = (d, txt) => !isFinite(d) ? '' : `<b class="${d < 0 ? 'neg' : 'pos'}">${d < 0 ? '▼' : '▲'}${txt}</b>`;
   const wonFull = v => '₩' + nf.format(Math.round(v));
@@ -721,7 +729,7 @@ function renderSales(L) {
   const pmcCell = `<div class="kcell"><span class="ktag">PMC</span><span class="kval">${wonFull(pmcC)}</span>
       <span class="ksub">${pmcP != null ? `${cmpLabel} ${wonFull(pmcP)} · <b class="neutral">${isFinite(d) ? (d < 0 ? '▼' : '▲') + (pmcP ? Math.abs(d / pmcP * 100).toFixed(1) + '%' : '') : ''}</b>` : ''}<span class="pmcr">매출 대비 ${totG ? (pmcC / totG * 100).toFixed(2) + '%' : '–'}</span></span></div>`;
   document.getElementById('kpiSales').innerHTML = `
-    <div class="kgroup four">${[...parts, etcPart].map(p => `<div class="kcell"><span class="ktag">${p.lg}</span><span class="kval">${wonFull(p.cur.g)}</span>
+    <div class="kgroup five">${[parts[0], parts[1], sepPart, parts[2], etcPart].map(p => `<div class="kcell"><span class="ktag">${p.lg}</span><span class="kval">${wonFull(p.cur.g)}</span>
       <span class="ksub">${p.prv ? `${cmpLabel} ${wonFull(p.prv.g)} · ${arrow(p.cur.g - p.prv.g, p.prv.g ? Math.abs((p.cur.g - p.prv.g) / p.prv.g * 100).toFixed(1) + '%' : '')}` : `일평균 ${wonFull(p.cur.g / W)}`}</span></div>`).join('')}</div>
     <div class="kgroup four">${parts.map(p => `<div class="kcell"><span class="ktag">${p.lp}</span><span class="kval">${isFinite(p.ppmC) ? (p.ppmC * 100).toFixed(2) + '%' : '–'}</span>
       <span class="ksub">${p.prv && isFinite(p.ppmP) ? `${cmpLabel} ${(p.ppmP * 100).toFixed(2)}% · ${arrow(p.ppmC - p.ppmP, Math.abs((p.ppmC - p.ppmP) * 100).toFixed(2) + '%p')}` : `판매 ${n0(sum(LB.filter(k => p.lp === '통합 PPM' || k.grp === (p.lp.startsWith('커피') ? '커피' : '음료')).map(k => k.Q)))}개`}</span></div>`).join('')}${pmcCell}</div>`;
