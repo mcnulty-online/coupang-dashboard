@@ -212,6 +212,7 @@ h2.sec .note { font-weight: 400; }
 .period b { color: var(--ink); font-weight: 600; }
 .dp-head h3 .note { font-weight: 400; margin-left: 6px; }
 .dtable.po td, .dtable.po th { font-size: 12px; }
+.dday { color: var(--muted); font-size: 11px; }
 @media (max-width: 860px) { .kpis.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .scroll8 { max-height: 440px; overflow: auto; }
 table.heat td { text-align: center; min-width: 44px; font-family: var(--mono); font-size: 12px; color: var(--ink); }
@@ -940,6 +941,11 @@ function renderStockAll(L) {
 /* ================= SKU 상세 ================= */
 const CG = [{ k: 'sFC', l: 'FC', c: '--s1' }, { k: 'sRC', l: 'RC', c: '--s2' }, { k: 'sETC', l: '기타센터', c: '--s3' }];
 
+// 발주 내역: 오늘(보는 날짜) 기준 입고예정일이 가까운 순 · 같은 거리면 다가올 날짜 먼저
+const TODAY = (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`; })();
+const dLabel = eta => { const d = dayDiff(TODAY, eta); return d === 0 ? 'D-day' : d > 0 ? `D-${d}` : `D+${-d}`; };
+const poByToday = list => [...list].sort((a, b) => { const da = dayDiff(TODAY, a.eta), db = dayDiff(TODAY, b.eta);
+  return Math.abs(da) - Math.abs(db) || db - da || b.q - a.q; });
 function renderPanel(k) {
   const el = document.getElementById('dpanel2');
   if (!el) return;
@@ -978,7 +984,7 @@ function renderPanel(k) {
 
     ${k.po.length ? `<details class="daily"><summary>발주 내역 ${k.po.length}건</summary><div class="tbl-wrap dtable po"><table>
       <thead><tr><th class="l">발주번호</th><th class="l">발주일</th><th class="l">센터</th><th class="l">입고예정</th><th>확정</th><th>입고</th><th>미입고</th><th>금액</th><th class="l">현황</th></tr></thead>
-      <tbody>${k.pending.map(x => `<tr><td class="l">${x.no}</td><td class="l">${md(x.odate)}</td><td class="l">${esc(x.ctr)}</td><td class="l ${x.late ? 'neg' : ''}">${md(x.eta)}${x.late ? ' 지연' : ''}</td>
+      <tbody>${poByToday(k.pending).map(x => `<tr><td class="l">${x.no}</td><td class="l">${md(x.odate)}</td><td class="l">${esc(x.ctr)}</td><td class="l ${x.late ? 'neg' : ''}">${md(x.eta)} <span class="dday">${dLabel(x.eta)}</span>${x.late ? ' 지연' : ''}</td>
         <td>${n0(x.conf)}</td><td>${n0(x.recv)}</td><td>${x.q ? n0(x.q) : '·'}</td><td>${won(x.amt)}</td><td class="l">${esc(x.stat)}${x.type !== '일반' ? ` · ${esc(x.type)}` : ''}</td></tr>`).join('')}</tbody></table></div></details>` : ''}`;
 
   const hb = j => {
