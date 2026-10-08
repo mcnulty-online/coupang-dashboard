@@ -207,6 +207,7 @@ h2.sec .note { font-weight: 400; }
 .dp-head h3 .note { font-weight: 400; margin-left: 6px; }
 .dtable.po td, .dtable.po th { font-size: 12px; }
 .dday { color: var(--muted); font-size: 11px; }
+.dtable.po thead tr.potot th { color: var(--ink); font-weight: 700; font-size: 12px; background: var(--accent-soft); border-bottom: 1px solid var(--line); }
 .dtable.po tr.done td { color: var(--muted); }
 .dtable.po tbody.donegrp tr:first-child td { border-top: 1px dashed var(--line); }
 .podone { justify-self: start; margin-top: 8px; font-size: 12px; }
@@ -984,10 +985,14 @@ function renderPanel(k) {
 
     ${k.po.length ? (() => {
       const open = poByToday(k.pending.filter(x => x.q > 0)), done = poByToday(k.pending.filter(x => x.q <= 0));
+      const tot = L => [sum(L.map(x => x.conf)), sum(L.map(x => x.recv)), sum(L.map(x => Math.max(0, x.q))), sum(L.map(x => x.amt))].join(',');
+      const totCells = (L, label) => { const [a, b, c, d] = tot(L).split(',').map(Number);
+        return `<th class="l" colspan="4">${label}</th><th>${n0(a)}</th><th>${n0(b)}</th><th>${n0(c)}</th><th>${won(d)}</th><th></th>`; };
       const row = x => `<tr class="${x.q > 0 ? '' : 'done'}"><td class="l">${x.no}</td><td class="l">${md(x.odate)}</td><td class="l">${esc(x.ctr)}</td><td class="l ${x.late ? 'neg' : ''}">${md(x.eta)} <span class="dday">${dLabel(x.eta)}</span>${x.late ? ' 지연' : ''}</td>
         <td>${n0(x.conf)}</td><td>${n0(x.recv)}</td><td>${x.q > 0 ? n0(x.q) : '·'}</td><td>${won(x.amt)}</td><td class="l">${esc(x.stat)}${x.type !== '일반' ? ` · ${esc(x.type)}` : ''}</td></tr>`;
       return `<details class="daily"><summary>발주 내역 · 미입고 ${open.length}건${done.length ? ` · 입고 완료 ${done.length}건` : ''}</summary><div class="tbl-wrap dtable po"><table>
-      <thead><tr><th class="l">발주번호</th><th class="l">발주일</th><th class="l">센터</th><th class="l">입고예정</th><th>확정</th><th>입고</th><th>미입고</th><th>금액</th><th class="l">현황</th></tr></thead>
+      <thead><tr><th class="l">발주번호</th><th class="l">발주일</th><th class="l">센터</th><th class="l">입고예정</th><th>확정</th><th>입고</th><th>미입고</th><th>금액</th><th class="l">현황</th></tr>
+      <tr class="potot" data-open="${tot(open)}" data-all="${tot([...open, ...done])}">${totCells(open, `합계 · 미입고 ${open.length}건`)}</tr></thead>
       <tbody>${open.length ? open.map(row).join('') : '<tr><td class="l empty" colspan="9">미입고 발주가 없습니다.</td></tr>'}</tbody>
       ${done.length ? `<tbody class="donegrp" hidden>${done.map(row).join('')}</tbody>` : ''}</table></div>
       ${done.length ? `<button class="chip podone" aria-expanded="false">입고 완료 ${done.length}건 보기</button>` : ''}</details>`;
@@ -996,6 +1001,9 @@ function renderPanel(k) {
   el.querySelectorAll('.podone').forEach(btn => btn.onclick = e => {
     e.stopPropagation(); const grp = btn.closest('details').querySelector('.donegrp'), show = grp.hidden;
     grp.hidden = !show; btn.setAttribute('aria-expanded', show); btn.textContent = show ? '입고 완료 접기' : `입고 완료 ${grp.rows.length}건 보기`;
+    const tr = btn.closest('details').querySelector('.potot'), [a, b, c, d] = (show ? tr.dataset.all : tr.dataset.open).split(',').map(Number);
+    const nOpen = btn.closest('details').querySelectorAll('tbody:not(.donegrp) tr:not(:has(.empty))').length;
+    tr.innerHTML = `<th class="l" colspan="4">${show ? `합계 · 전체 ${nOpen + grp.rows.length}건` : `합계 · 미입고 ${nOpen}건`}</th><th>${n0(a)}</th><th>${n0(b)}</th><th>${n0(c)}</th><th>${won(d)}</th><th></th>`;
   });
   const hb = j => {
     const box = document.getElementById('hb');
