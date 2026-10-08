@@ -88,10 +88,10 @@ cgd = o.pivot_table(index=['SKU ID', 'd'], columns='cg', values='현재재고수
 
 meta = {}
 for sid, r in s.sort_values('d').groupby('SKU ID').tail(1).set_index('SKU ID').iterrows():
-    meta[sid] = dict(name=r['SKU명'], cat=r['세부카테고리'], brand=r['브랜드'])
+    meta[sid] = dict(name=r['SKU명'], cat=r['세부카테고리'], brand=r['브랜드'], sub=r['하위카테고리'])
 last_o = o.sort_values('d').groupby('SKU ID').tail(1).set_index('SKU ID')
 for sid, r in last_o.iterrows():
-    m = meta.setdefault(sid, dict(name=r['SKU 명'], cat=r['세부 카테고리'], brand=r['브랜드']))
+    m = meta.setdefault(sid, dict(name=r['SKU 명'], cat=r['세부 카테고리'], brand=r['브랜드'], sub=r['하위 카테고리']))
     m.update(status=r['발주가능상태_세부'], order=r['발주가능상태'], uc=int(r['매입원가']), lastOps=r['d'])
 lastday = o[o['d'] == end]
 ctr_last = {sid: {c: int(v) for c, v in g.groupby('ctr')['현재재고수량'].sum().sort_values(ascending=False).items() if v > 0}
@@ -116,7 +116,7 @@ F = ['g', 'q', 'r', 'c', 'p', 'v', 'o', 'pq', 'pmc', 'st', 'out', 'inq', 'so', '
 skus, idx = [], {}
 for sid in sorted(meta):
     m = meta[sid]; idx[sid] = len(skus)
-    skus.append(dict(id=int(sid), name=m['name'], cat=m['cat'], brand=m['brand'], grp=grp(m['cat']),
+    skus.append(dict(id=int(sid), name=m['name'], cat=m['cat'], brand=m['brand'], sub=m.get('sub'), grp=grp(m['cat']),
                      status=m.get('status', '정보없음'), order=m.get('order', '정보없음'),
                      rating=m.get('rating'), reviews=m.get('reviews', 0),
                      inOps=sid in last_o.index and m.get('lastOps') == end, uc=m.get('uc'), ctr=ctr_last.get(sid, {}),

@@ -709,6 +709,10 @@ function renderSales(L) {
     const ppmC = cur.g ? (cur.g - cur.c * 1.1) / cur.g : NaN, ppmP = prv && prv.g ? (prv.g - prv.c * 1.1) / prv.g : NaN;
     return { lg, lp, cur, prv, ppmC, ppmP };
   });
+  // 기타 = 하위카테고리 Kitchen Appliance + Tools & Gadgets (커피머신·드립주전자·커피필터 등)
+  const ETC_SUB = ['Kitchen Appliance', 'Tools & Gadgets'];
+  const aggSub = (a, b) => { const S = LB.filter(k => ETC_SUB.includes(k.sub)); return { g: sum(S.map(k => rng(k, 'g', a, b))) }; };
+  const etcPart = { lg: '기타 매출액(GMV)', cur: aggSub(state.i0, state.i1), prv: pr && pr[0] >= 0 ? aggSub(pr[0], pr[1]) : null };
   const arrow = (d, txt) => !isFinite(d) ? '' : `<b class="${d < 0 ? 'neg' : 'pos'}">${d < 0 ? '▼' : '▲'}${txt}</b>`;
   const wonFull = v => '₩' + nf.format(Math.round(v));
   // PMC = 쿠팡 추가 할인가 합계 (증감 화살표는 좋고 나쁨 없이 중립색)
@@ -717,7 +721,7 @@ function renderSales(L) {
   const pmcCell = `<div class="kcell"><span class="ktag">PMC</span><span class="kval">${wonFull(pmcC)}</span>
       <span class="ksub">${pmcP != null ? `${cmpLabel} ${wonFull(pmcP)} · <b class="neutral">${isFinite(d) ? (d < 0 ? '▼' : '▲') + (pmcP ? Math.abs(d / pmcP * 100).toFixed(1) + '%' : '') : ''}</b>` : ''}<span class="pmcr">매출 대비 ${totG ? (pmcC / totG * 100).toFixed(2) + '%' : '–'}</span></span></div>`;
   document.getElementById('kpiSales').innerHTML = `
-    <div class="kgroup">${parts.map(p => `<div class="kcell"><span class="ktag">${p.lg}</span><span class="kval">${wonFull(p.cur.g)}</span>
+    <div class="kgroup four">${[...parts, etcPart].map(p => `<div class="kcell"><span class="ktag">${p.lg}</span><span class="kval">${wonFull(p.cur.g)}</span>
       <span class="ksub">${p.prv ? `${cmpLabel} ${wonFull(p.prv.g)} · ${arrow(p.cur.g - p.prv.g, p.prv.g ? Math.abs((p.cur.g - p.prv.g) / p.prv.g * 100).toFixed(1) + '%' : '')}` : `일평균 ${wonFull(p.cur.g / W)}`}</span></div>`).join('')}</div>
     <div class="kgroup four">${parts.map(p => `<div class="kcell"><span class="ktag">${p.lp}</span><span class="kval">${isFinite(p.ppmC) ? (p.ppmC * 100).toFixed(2) + '%' : '–'}</span>
       <span class="ksub">${p.prv && isFinite(p.ppmP) ? `${cmpLabel} ${(p.ppmP * 100).toFixed(2)}% · ${arrow(p.ppmC - p.ppmP, Math.abs((p.ppmC - p.ppmP) * 100).toFixed(2) + '%p')}` : `판매 ${n0(sum(LB.filter(k => p.lp === '통합 PPM' || k.grp === (p.lp.startsWith('커피') ? '커피' : '음료')).map(k => k.Q)))}개`}</span></div>`).join('')}${pmcCell}</div>`;
