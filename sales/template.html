@@ -469,6 +469,8 @@ const BORD = { urgent: 0, caution: 1, stable: 2, over: 3, nosale: 4, na: 5 };
 /* ---------- 재고·발주 지표 (기준일 고정) ---------- */
 DATA.skus.forEach(k => {
   k.avg30 = sum(k.q.slice(-AVG_DAYS)) / AVG_DAYS;
+  { const g = k.g.slice(-AVG_DAYS), so = k.so.slice(-AVG_DAYS), ok = g.filter((_, i) => !so[i]), b = ok.length ? sum(ok) / ok.length : 0;
+    k.G30 = sum(g); k.so30 = sum(so); k.lost30 = so.reduce((t, s, i) => t + (s ? Math.max(0, b - g[i]) : 0), 0); }
   k.stock = k.inOps ? k.st[N - 1] : null;
   const tq = sum(k.q), tc = sum(k.c);
   k.unitCost = k.uc || (tq ? tc / tq : null);
@@ -546,6 +548,8 @@ function applyWindow() {
 const state = { win: 'd1', grp: '전체', brand: '전체', tab: 'sales', q: '', aq: '', st: 'all', open: null, mode: 'yoy',
   sort: { key: 'G', dir: -1 }, aSort: { key: 'stockVal', dir: -1 } };
 const brands = [...new Set(DATA.skus.map(k => k.brand))].sort();
+// 재고·발주 탭: 기간과 무관 (기준일 재고·발주·최근 30일 판매가 있는 SKU)
+function stockList() { return DATA.skus.filter(k => (state.grp === '전체' || k.grp === state.grp) && (state.brand === '전체' || k.brand === state.brand) && (k.inOps || k.pend > 0 || k.G30 > 0)); }
 function list() { return DATA.skus.filter(k => (state.grp === '전체' || k.grp === state.grp) && (state.brand === '전체' || k.brand === state.brand) && (k.inOps || k.pend > 0 || k.G > 0)); }
 
 /* ---------- 컨트롤 ---------- */
@@ -569,12 +573,12 @@ function setTab(tab, push) {
   state.tab = tab;
   document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.tab === tab));
   ['sales', 'stock', 'yoy'].forEach(v => document.getElementById('view-' + v).hidden = v !== tab);
-  document.getElementById('winRow').hidden = tab === 'yoy';
+  document.getElementById('winRow').hidden = tab === 'yoy' || tab === 'stock';
   document.getElementById('yWinRow').hidden = tab !== 'yoy';
   if (push) try { history.replaceState(null, '', '#' + tab); } catch (e) {}
   renderAll();
 }
-document.getElementById('stockSearch').oninput = e => { state.aq = e.target.value.trim(); renderStockAll(list()); };
+document.getElementById('stockSearch').oninput = e => { state.aq = e.target.value.trim(); renderStockAll(stockList()); };
 
 document.getElementById('srcNote').textContent =
   `데이터: 판매 ${DATA.files.sales.join(', ')} · 재고 ${DATA.files.ops.join(', ')} · 발주 ${DATA.files.po.join(', ') || '없음'} · 생성 ${DATA.generated}. 재고는 같은 날 센터별 행을 합산했고, 같은 날짜가 여러 파일에 있으면 최신 파일 기준입니다.`;
@@ -836,17 +840,17 @@ function renderStock(L) {
   const docs = O.filter(k => k.doc != null && isFinite(k.doc)).map(k => k.doc).sort((a, b) => a - b);
   const median = docs.length ? docs[Math.floor(docs.length / 2)] : NaN;
   const low = O.filter(k => k.bucket.key === 'urgent'), over = O.filter(k => k.bucket.key === 'over' || (k.bucket.key === 'nosale' && k.stock > 0));
-  const soDays = sum(O.map(k => k.soDays)), lost = sum(O.map(k => k.lost)), G = sum(L.map(k => k.G));
+  const soDays = sum(O.map(k => k.so30)), lost = sum(O.map(k => k.lost30)), G = sum(L.map(k => k.G30));
   tiles('kpiStock', [
     { lab: `${md(ASOF)} 재고`, val: n0(stock), unit: '개', sub: `매입원가 기준 ${won(stockVal)}원` },
     { lab: '재고일수 중앙값', val: isFinite(median) ? Math.floor(median) : '–', unit: '일', sub: `최근 ${AVG_DAYS}일 평균 판매 기준` },
     { lab: '재고 7일 미만', val: low.length, unit: 'SKU', sub: `입고 예정 있는 SKU ${low.filter(k => k.pend).length}개`, flag: '--crit' },
     { lab: '재고 90일 이상', val: over.length, unit: 'SKU', sub: '판매없음 포함 과잉 재고', flag: '--warn' },
-    { lab: `품절 SKU·일 · ${state.wLabel}`, val: n0(soDays), unit: '건', sub: `품절 경험 SKU ${O.filter(k => k.soDays).length}개` },
-    { lab: `품절 추정 손실 · ${state.wLabel}`, val: won(lost), unit: '원', sub: `기간 매출의 ${pct(lost / G)}`, flag: '--serious' }
+    { lab: '품절 SKU·일 · 최근 30일', val: n0(soDays), unit: '건', sub: `품절 경험 SKU ${O.filter(k => k.so30).length}개` },
+    { lab: '품절 추정 손실 · 최근 30일', val: won(lost), unit: '원', sub: `최근 30일 매출의 ${pct(lost / G)}`, flag: '--serious' }
   ]);
-  smallTable('tLow', 'nLow', ['SKU', '재고', '일평균 판매', '재고일수', '입고 예정', '기간 매출'], [...low].sort((a, b) => b.G - a.G).map(k =>
-    `<tr class="click" data-id="${k.id}">${skuCell(k)}<td>${n0(k.stock)}</td><td>${k.avg30.toFixed(1)}</td><td>${pill(k.bucket, docTxt(k.doc))}</td><td>${etaTxt(k)}</td><td>${won(k.G)}</td></tr>`));
+  smallTable('tLow', 'nLow', ['SKU', '재고', '일평균 판매', '재고일수', '입고 예정', '최근 30일 매출'], [...low].sort((a, b) => b.G30 - a.G30).map(k =>
+    `<tr class="click" data-id="${k.id}">${skuCell(k)}<td>${n0(k.stock)}</td><td>${k.avg30.toFixed(1)}</td><td>${pill(k.bucket, docTxt(k.doc))}</td><td>${etaTxt(k)}</td><td>${won(k.G30)}</td></tr>`));
   smallTable('tOver', 'nOver', ['SKU', '재고', '재고 금액', '재고일수', '입고 대기'], [...over].sort((a, b) => (b.stockVal || 0) - (a.stockVal || 0)).map(k =>
     `<tr class="click" data-id="${k.id}">${skuCell(k)}<td>${n0(k.stock)}</td><td>${k.stockVal != null ? won(k.stockVal) : '–'}</td><td>${pill(k.bucket, docTxt(k.doc))}</td><td class="${k.pend ? 'neg' : ''}">${k.pend ? n0(k.pend) : '–'}</td></tr>`));
 
@@ -885,7 +889,7 @@ const ACOLS = [
   { key: 'stock', lab: '재고' }, { key: 'stockVal', lab: '재고 금액' },
   { key: 'avg30', lab: '일평균 판매', sub: '최근 30일' }, { key: 'doc', lab: '재고일수', sub: '현재' },
   { key: 'pend', lab: '입고 예정', sub: '수량 · 첫 입고' }, { key: 'docPOs', lab: '입고 후', sub: '재고일수' },
-  { key: 'soDays', lab: '품절일', sub: '기간' }
+  { key: 'so30', lab: '품절일', sub: '최근 30일' }
 ];
 function sorter(st) {
   const { key, dir } = st;
@@ -911,7 +915,7 @@ state.ast = '';
 function renderStockAll(L) {
   const q = state.aq.toLowerCase();
   // 상태 범례 = 필터 버튼
-  renderStLegend('stLegStock', L, state.ast, v => { state.ast = v; renderStockAll(list()); });
+  renderStLegend('stLegStock', L, state.ast, v => { state.ast = v; renderStockAll(stockList()); });
   const rows = L.filter(k => (!state.ast || k.bucket.key === state.ast) && (!q || k.name.toLowerCase().includes(q) || String(k.id).includes(q) || k.cat.includes(q))).sort(sorter(state.aSort));
   document.getElementById('nAll').textContent = rows.length === L.length ? `${L.length}개` : `${rows.length}개 / 전체 ${L.length}개`;
   const t = document.getElementById('tAll');
@@ -922,12 +926,12 @@ function renderStockAll(L) {
       <td>${pill(k.bucket, docTxt(k.doc))}</td>
       <td>${etaTxt(k)}</td>
       <td>${k.pend ? pill(k.bucketPO, docTxt(k.docPO)) : '<span class="muted">–</span>'}</td>
-      <td class="${k.soDays ? 'neg' : ''}">${k.soDays ? k.soDays + '일' : '–'}</td></tr>`).join('')
+      <td class="${k.so30 ? 'neg' : ''}">${k.so30 ? k.so30 + '일' : '–'}</td></tr>`).join('')
     : `<tr><td class="l empty" colspan="${ACOLS.length}">검색 결과가 없습니다.</td></tr>`) + '</tbody>';
   t.querySelectorAll('th.sortable').forEach(th => th.onclick = () => {
     const c = ACOLS[+th.dataset.i];
     state.aSort = { key: c.key, dir: state.aSort.key === c.key ? -state.aSort.dir : (['doc', 'docPOs', 'bucketOrd'].includes(c.key) ? 1 : -1) };
-    renderStockAll(list());
+    renderStockAll(stockList());
   });
   fitScroll5();
 }
@@ -1347,10 +1351,10 @@ function renderAll() {
   const ws = document.getElementById('winSel'); ws.value = WINS.find(w => w.id === state.win && !w.quick) ? state.win : ''; ws.classList.toggle('on', !!ws.value);
   document.querySelectorAll('#grpChips .chip').forEach(c => c.setAttribute('aria-pressed', c.textContent === state.grp));
   bs.value = state.brand;
-  document.getElementById('period').innerHTML = `기준일 <b>${ASOF} (${wd(ASOF)})</b> · 선택 기간 ${(d => d.slice(0, 4) === ASOF.slice(0, 4) ? md(d) : `${d.slice(2, 4)}년 ${md(d)}`)(DAYS[state.i0])}~${md(DAYS[state.i1])} (${state.W}일)`;
+  document.getElementById('period').innerHTML = state.tab === 'stock' ? `기준일 <b>${ASOF} (${wd(ASOF)})</b> · 재고·발주는 기준일 기준` : `기준일 <b>${ASOF} (${wd(ASOF)})</b> · 선택 기간 ${(d => d.slice(0, 4) === ASOF.slice(0, 4) ? md(d) : `${d.slice(2, 4)}년 ${md(d)}`)(DAYS[state.i0])}~${md(DAYS[state.i1])} (${state.W}일)`;
   const L = list();
   if (state.tab === 'sales') renderSales(L);
-  if (state.tab === 'stock') renderStock(L);
+  if (state.tab === 'stock') renderStock(stockList());
   if (state.tab === 'yoy') renderYoy(L);
   if (state.drawer != null) { const k = DATA.skus.find(x => x.id === state.drawer); if (k) renderPanel(k); }
 }
