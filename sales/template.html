@@ -551,8 +551,14 @@ const WINS = [
     });
   })()
 ];
+// 그래프에서 누른 날짜: state.win = 'day:YYYY-MM-DD' (기준일이면 '당일'로)
+function dayWin(id) {
+  const d = id.slice(4), i = DAYS.indexOf(d); if (i < 0) return null;
+  return { id, label: `${md(d)}(${wd(d)})`, i0: i, i1: i, prev: i > 0 ? [i - 1, i - 1] : null, prevLabel: '전일' };
+}
+function pickDay(d) { state.win = d === ASOF ? 'd1' : 'day:' + d; applyWindow(); renderAll(); }
 function applyWindow() {
-  const w = WINS.find(x => x.id === state.win) || WINS[1]; state.prev = w.prev; state.prevLabel = w.prevLabel;
+  const w = (state.win.startsWith('day:') && dayWin(state.win)) || WINS.find(x => x.id === state.win) || WINS[1]; state.prev = w.prev; state.prevLabel = w.prevLabel;
   state.i0 = w.i0; state.i1 = w.i1; state.W = w.i1 - w.i0 + 1; state.wLabel = w.label;
   const sl = a => a.slice(w.i0, w.i1 + 1);
   DATA.skus.forEach(k => {
@@ -588,6 +594,9 @@ WINS.filter(w => w.quick).forEach(w => { const b = document.createElement('butto
 // 지난 기간: 연도·월별 드롭다운
 const winSel = document.createElement('select'); winSel.id = 'winSel'; winSel.setAttribute('aria-label', '지난 기간 선택');
 winSel.innerHTML = '<option value="">지난 기간 ▾</option>' + ['연도', '월별'].map(g => `<optgroup label="${g}">${WINS.filter(w => !w.quick && w.grp === g).map(w => `<option value="${w.id}">${w.label}</option>`).join('')}</optgroup>`).join('');
+const dayChip = document.createElement('button'); dayChip.className = 'chip daychip'; dayChip.id = 'win-day'; dayChip.hidden = true;
+dayChip.title = '선택한 날짜 해제 (당일로)'; dayChip.onclick = () => { state.win = 'd1'; applyWindow(); renderAll(); };
+winBox.appendChild(dayChip);
 winSel.onchange = () => { if (!winSel.value) return; state.win = winSel.value; applyWindow(); renderAll(); };
 winBox.appendChild(winSel);
 const chipBox = document.getElementById('grpChips');
@@ -779,22 +788,27 @@ function renderSales(L) {
   // ---- 매출 그래프: 45일 이하는 일별, 그보다 길면 월별. 1일은 최근 14일 중 그날 강조 ----
   const B = baseOpts(), s1 = css('--s1'), s1s = css('--s1-soft');
   let labels, vals, titles, hi = null, title, note;
+  let pick = null;   // 막대를 누르면: 일별 → 그 날짜, 월별 → 그 달
   if (W === 1) {
-    const a = Math.max(0, N - 14), ix = [...Array(N - a).keys()].map(j => a + j);
+    const sel = i0, a = sel >= N - 14 ? Math.max(0, N - 14) : Math.max(0, sel - 7),   // 최근 14일 안이면 그대로, 더 옛날이면 그 날짜 중심
+       ix = [...Array(Math.min(14, N - a)).keys()].map(j => a + j);
     labels = ix.map(i => `${md(DAYS[i])}(${wd(DAYS[i])})`); titles = ix.map(i => DAYS[i]);
-    vals = ix.map(i => sum(L.map(k => k.g[i]))); hi = ix.length - 1;
-    title = '일별 매출'; note = `최근 14일 · ${md(ASOF)} 강조`;
+    vals = ix.map(i => sum(L.map(k => k.g[i]))); hi = sel - a;
+    title = '일별 매출'; note = `${md(DAYS[sel])} 강조 · 막대를 누르면 그 날짜로 바뀝니다`;
+    pick = j => pickDay(titles[j]);
   } else if (W <= 45) {
     const ix = [...Array(W).keys()].map(j => i0 + j);
     labels = ix.map(i => `${md(DAYS[i])}(${wd(DAYS[i])})`); titles = ix.map(i => DAYS[i]);
     vals = ix.map(i => sum(L.map(k => k.g[i])));
-    title = '일별 매출'; note = `${state.wLabel}`;
+    title = '일별 매출'; note = `${state.wLabel} · 막대를 누르면 그 날짜로 바뀝니다`;
+    pick = j => pickDay(titles[j]);
   } else {
     const mm = {}; for (let i = i0; i <= state.i1; i++) { const m = DAYS[i].slice(0, 7); (mm[m] ||= []).push(i); }
     const ms = Object.keys(mm);
     labels = ms.map(m => `${+m.slice(5)}월${m === ASOF.slice(0, 7) && !ASOF.endsWith(String(daysInMonth(m)).padStart(2, '0')) ? `(~${+ASOF.slice(8)}일)` : ''}`);
     titles = ms.map(m => m.replace('-', '년 ') + '월'); vals = ms.map(m => sum(L.map(k => sum(mm[m].map(i => k.g[i])))));
-    title = '월별 매출'; note = `${state.wLabel} · 기간이 길어 월 단위로 묶었습니다`;
+    title = '월별 매출'; note = `${state.wLabel} · 월 단위 · 막대를 누르면 그 달로 바뀝니다`;
+    pick = j => { const m = ms[j], id = m === ASOF.slice(0, 7) ? 'mtd' : 'm' + m; if (WINS.some(w => w.id === id)) { state.win = id; applyWindow(); renderAll(); } };
   }
   document.getElementById('salesChartTitle').textContent = title;
   document.getElementById('salesChartNote').textContent = note;
@@ -812,6 +826,8 @@ function renderSales(L) {
     plugins: [valLabels],
     options: baseOpts({
       layout: { padding: { top: vals.length > 31 || (W > 1 && W <= 45 && vals.length > 28) ? 44 : 20 } },
+      onClick: (e, _, c) => { const el = c.getElementsAtEventForMode(e, 'index', { intersect: false }, false)[0]; if (el && pick) pick(el.index); },
+      onHover: (e, _, c) => { c.canvas.style.cursor = pick && c.getElementsAtEventForMode(e, 'index', { intersect: false }, false).length ? 'pointer' : 'default'; },
       plugins: { ...B.plugins, tooltip: { ...B.plugins.tooltip, callbacks: { title: c => titles[c[0].dataIndex], label: c => ` 매출 ${n0(c.raw)}원` } } },
       scales: { x: { ...B.scales.x, ticks: { ...B.scales.x.ticks, maxRotation: 0, autoSkipPadding: 8 } },
                 y: { ...B.scales.y, beginAtZero: true, grace: '8%', ticks: { ...B.scales.y.ticks, callback: v => won(v) } } },
@@ -1437,7 +1453,8 @@ document.addEventListener('click', e => {
 });
 
 function renderAll() {
-  document.querySelectorAll('#winChips .chip').forEach(c => c.setAttribute('aria-pressed', c.id === 'win-' + state.win));
+  document.querySelectorAll('#winChips .chip').forEach(c => c.setAttribute('aria-pressed', c.id === 'win-' + state.win || (c.id === 'win-day' && state.win.startsWith('day:'))));
+  const dc = document.getElementById('win-day'); dc.hidden = !state.win.startsWith('day:'); if (!dc.hidden) dc.textContent = state.wLabel + ' ✕';
   const ws = document.getElementById('winSel'); ws.value = WINS.find(w => w.id === state.win && !w.quick) ? state.win : ''; ws.classList.toggle('on', !!ws.value);
   document.querySelectorAll('#grpChips .chip').forEach(c => c.setAttribute('aria-pressed', c.textContent === state.grp));
   bs.value = state.brand;
