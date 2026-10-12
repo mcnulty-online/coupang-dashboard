@@ -866,7 +866,7 @@ function renderSalesTable(L) {
   t.innerHTML = headRow(COLS, state.sSort, 'data-i') + '<tbody>' + (rows.length ? rows.map((k, i) => `<tr class="click" data-id="${k.id}">
       <td class="l muted">${i + 1}</td>${skuCell(k)}
       <td><b>${won(k.G)}</b></td>
-      <td>${n0(k.Q)}</td><td>${k.avgQ.toFixed(1)}</td>
+      <td>${n0(k.Q)}</td><td>${n0(k.avgQ)}</td>
       <td class="${k.ppm < 0 ? 'neg' : ''}">${pct(k.ppm)}</td><td>${k.PMC ? won(k.PMC) : '–'}</td>
       ${showStock ? `<td>${k.stock == null ? '–' : n0(k.stock)}</td><td>${pill(k.bucket, docTxt(k.doc))}</td><td>${etaTxt(k)}</td>
       <td>${k.pend ? pill(k.bucketPO, docTxt(k.docPO)) : '<span class="muted">–</span>'}</td>` : ''}</tr>`).join('')
@@ -947,7 +947,7 @@ function renderStock(L) {
     { lab: '품절 추정 손실 · 최근 30일', val: won(lost), unit: '원', sub: `최근 30일 매출의 ${pct(lost / G)}`, flag: '--serious' }
   ]);
   smallTable('tLow', 'nLow', ['SKU', '재고', '일평균 판매', '재고일수', '입고 예정', '최근 30일 매출'], [...low].sort((a, b) => b.G30 - a.G30).map(k =>
-    `<tr class="click" data-id="${k.id}">${skuCell(k)}<td>${n0(k.stock)}</td><td>${k.avg30.toFixed(1)}</td><td>${pill(k.bucket, docTxt(k.doc))}</td><td>${etaTxt(k)}</td><td>${won(k.G30)}</td></tr>`));
+    `<tr class="click" data-id="${k.id}">${skuCell(k)}<td>${n0(k.stock)}</td><td>${n0(k.avg30)}</td><td>${pill(k.bucket, docTxt(k.doc))}</td><td>${etaTxt(k)}</td><td>${won(k.G30)}</td></tr>`));
   smallTable('tOver', 'nOver', ['SKU', '재고', '재고 금액', '재고일수', '입고 대기'], [...over].sort((a, b) => (b.stockVal || 0) - (a.stockVal || 0)).map(k =>
     `<tr class="click" data-id="${k.id}">${skuCell(k)}<td>${n0(k.stock)}</td><td>${k.stockVal != null ? won(k.stockVal) : '–'}</td><td>${pill(k.bucket, docTxt(k.doc))}</td><td class="${k.pend ? 'neg' : ''}">${k.pend ? n0(k.pend) : '–'}</td></tr>`));
 
@@ -966,10 +966,10 @@ function renderStock(L) {
     { lab: '입고 전 품절 위험', val: gap.length, unit: 'SKU', sub: `입고 후 과잉 예상 ${poOver.length}개`, flag: gap.length ? '--crit' : null }
   ]);
   smallTable('tGap', 'nGap', ['SKU', '재고', '일평균', '재고 소진', '첫 입고', '공백'], [...gap].sort((a, b) => b.avg30 - a.avg30).map(k =>
-    `<tr class="click" data-id="${k.id}">${skuCell(k)}<td>${n0(k.stock)}</td><td>${k.avg30.toFixed(1)}</td><td>${k.runout ? md(k.runout) : '–'}</td>
+    `<tr class="click" data-id="${k.id}">${skuCell(k)}<td>${n0(k.stock)}</td><td>${n0(k.avg30)}</td><td>${k.runout ? md(k.runout) : '–'}</td>
      <td>${k.firstEta ? md(k.firstEta) : '<span class="neg">발주 없음</span>'}</td><td class="neg">${isFinite(k.gap) ? k.gap + '일' : '–'}</td></tr>`), '입고 전에 재고가 바닥나는 SKU가 없습니다.');
   smallTable('tPoOver', 'nPoOver', ['SKU', '재고', '일평균', '입고 대기', '대기 금액', '입고 후 재고일수'], [...poOver].sort((a, b) => b.pendAmt - a.pendAmt).map(k =>
-    `<tr class="click" data-id="${k.id}">${skuCell(k)}<td>${n0(k.stock)}</td><td>${k.avg30.toFixed(1)}</td><td>${n0(k.pend)}</td><td>${won(k.pendAmt)}</td><td>${pill(k.bucketPO, docTxt(k.docPO))}</td></tr>`));
+    `<tr class="click" data-id="${k.id}">${skuCell(k)}<td>${n0(k.stock)}</td><td>${n0(k.avg30)}</td><td>${n0(k.pend)}</td><td>${won(k.pendAmt)}</td><td>${pill(k.bucketPO, docTxt(k.docPO))}</td></tr>`));
   smallTable('tLate', 'nLate', ['SKU', '발주번호', '센터', '입고예정', '미입고'], late.sort((a, b) => a.p.eta.localeCompare(b.p.eta)).map(({ k, p }) =>
     `<tr class="click" data-id="${k.id}">${skuCell(k)}<td class="mono">${p.no}</td><td>${esc(p.ctr)}</td><td class="neg">${md(p.eta)}</td><td>${n0(p.q)}</td></tr>`), '지연된 발주가 없습니다.');
   const PO_ONLY = DATA.poOnly || [];
@@ -1020,7 +1020,7 @@ function renderStockAll(L) {
   t.innerHTML = headRow(ACOLS, state.aSort, 'data-i') + '<tbody>' + (rows.length ? rows.map(k => `<tr class="click" data-id="${k.id}">
       <td class="l">${pill(k.bucket)}</td>${skuCell(k)}
       <td><b>${k.stock == null ? '–' : n0(k.stock)}</b></td>
-      <td>${k.stockVal == null ? '–' : won(k.stockVal)}</td><td>${k.avg30.toFixed(1)}</td>
+      <td>${k.stockVal == null ? '–' : won(k.stockVal)}</td><td>${n0(k.avg30)}</td>
       <td>${pill(k.bucket, docTxt(k.doc))}</td>
       <td>${etaTxt(k)}</td>
       <td>${k.pend ? pill(k.bucketPO, docTxt(k.docPO)) : '<span class="muted">–</span>'}</td>
@@ -1105,7 +1105,7 @@ function renderPanel(k) {
   const hb = j => {
     const box = document.getElementById('hb');
     if (j >= W) { const f = j - W;
-      box.innerHTML = `<b>${fDays[f]} (${wd(fDays[f])})</b><span class="tag">예상</span><span>예상 재고 <b>${n0(proj[f])}</b>개</span>${arrive[f] ? `<span>입고 예정 <b>${n0(arrive[f])}</b>개</span>` : ''}<span class="muted">하루 ${k.avg30.toFixed(1)}개 판매 가정</span>`; return; }
+      box.innerHTML = `<b>${fDays[f]} (${wd(fDays[f])})</b><span class="tag">예상</span><span>예상 재고 <b>${n0(proj[f])}</b>개</span>${arrive[f] ? `<span>입고 예정 <b>${n0(arrive[f])}</b>개</span>` : ''}<span class="muted">하루 ${n0(k.avg30)}개 판매 가정</span>`; return; }
     const i = idx[j], ctr = CG.filter(x => k[x.k][i]).map(x => `${x.l} ${n0(k[x.k][i])}`).join(' · ');
     box.innerHTML = `<b>${DAYS[i]} (${wd(DAYS[i])})</b>${i === N - 1 ? '<span class="tag">기준일</span>' : ''}
       <span>판매 <b>${n0(k.q[i])}</b>개</span><span>매출 <b>${won(k.g[i])}</b></span><span>평균 판매단가 <b>${k.q[i] ? n0(k.g[i] / k.q[i]) : '–'}</b></span>
