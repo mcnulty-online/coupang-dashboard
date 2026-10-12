@@ -566,7 +566,8 @@ function applyWindow() {
     k.G = sum(g); k.Q = sum(q); k.R = sum(sl(k.r)); k.C = sum(sl(k.c)); k.P = sum(sl(k.p)); k.V = sum(sl(k.v)); k.O = sum(sl(k.o)); k.PQ = sum(sl(k.pq)); k.PMC = sum(sl(k.pmc));
     k.ppm = k.G ? (k.G - k.C * 1.1) / k.G : NaN;
     k.ret = k.Q ? k.R / k.Q : NaN; k.cvr = k.V ? k.O / k.V : NaN; k.promo = k.G ? k.P / k.G : NaN;
-    k.avgQ = k.Q / state.W;
+    // 하루짜리 기간(당일·선택한 날짜)은 그날까지 최근 30일 일평균, 그 외는 선택 기간 일평균
+    k.avgQ = state.W === 1 ? sum(k.q.slice(Math.max(0, w.i1 - 29), w.i1 + 1)) / Math.min(30, w.i1 + 1) : k.Q / state.W;
     k.soDays = k.inOps || sum(so) ? sum(so) : 0;
     k.inSum = sum(sl(k.inq));
     const ok = g.filter((_, i) => !so[i]), b = ok.length ? sum(ok) / ok.length : 0;
@@ -855,7 +856,7 @@ function renderSalesTable(L) {
   const showStock = state.win === 'd1';
   ['sfSt', 'sfPo', 'stLegSales'].forEach(id => document.getElementById(id).hidden = !showStock);
   const fst = showStock ? f.st : '', fpo = showStock ? f.po : '';
-  const COLS = showStock ? SCOLS2 : SCOLS2.filter(c => !STOCK_KEYS.includes(c.key));
+  const COLS = (showStock ? SCOLS2 : SCOLS2.filter(c => !STOCK_KEYS.includes(c.key))).map(c => c.key === 'avgQ' && state.W === 1 ? { ...c, sub: '최근 30일' } : c);
   if (!showStock && STOCK_KEYS.includes(state.sSort.key)) state.sSort = { key: 'G', dir: -1 };
   const rows = L.filter(k => (!q || k.name.toLowerCase().includes(q) || String(k.id).includes(q)) && (!f.cat || k.cat === f.cat) &&
     (!fst || k.bucket.key === fst) && (!fpo || (fpo === 'y') === (k.pend > 0)) && (!f.sale || (f.sale === 'y') === (k.G > 0))).sort(sorter(state.sSort));
