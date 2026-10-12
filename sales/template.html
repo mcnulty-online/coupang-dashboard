@@ -216,6 +216,16 @@ h2.sec .note { font-weight: 400; }
 .fc-bar { height: 8px; background: var(--grid); border-radius: 4px; overflow: hidden; }
 .fc-bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
 .fc-tbl td, .fc-tbl th { font-size: 13px; }
+.fc-bar { position: relative; overflow: visible !important; }
+.fc-bar b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink-2); }
+.fc-axis { display: flex; justify-content: space-between; font-size: 11px; }
+@media (max-width: 520px) { .fc-val { font-size: 22px; } }
+.fc-tbl td.fcbad { color: var(--crit-ink); font-weight: 600; }
+.fc-back summary { cursor: pointer; font-size: 13px; color: var(--ink-2); line-height: 1.6; }
+.fc-back[open] summary { margin-bottom: 8px; }
+.kgroup.pmcrow .fccard { grid-column: span 2; cursor: pointer; }
+.kgroup.pmcrow .fccard:hover { border-color: var(--accent) !important; }
+.fccard .fclink { color: var(--accent); font-weight: 600; margin-left: 4px; }
 .dtable.po thead tr.potot th { color: var(--ink); font-weight: 700; font-size: 12px; background: var(--accent-soft); border-bottom: 1px solid var(--line); }
 .dtable.po tr.done td { color: var(--muted); }
 .dtable.po tbody.donegrp tr:first-child td { border-top: 1px dashed var(--line); }
@@ -759,7 +769,9 @@ function renderSales(L) {
       <span class="ksub">${p.prv ? `${cmpLabel} ${wonFull(p.prv.g)} · ${arrow(p.cur.g - p.prv.g, p.prv.g ? Math.abs((p.cur.g - p.prv.g) / p.prv.g * 100).toFixed(1) + '%' : '')}` : `일평균 ${wonFull(p.cur.g / W)}`}</span></div>`).join('')}</div>
     <div class="kgroup five">${ORDER.map(p => `<div class="kcell"><span class="ktag">${p.lp}</span><span class="kval">${isFinite(p.ppmC) ? (p.ppmC * 100).toFixed(2) + '%' : '–'}</span>
       <span class="ksub">${p.prv && isFinite(p.ppmP) && isFinite(p.ppmC) ? `${cmpLabel} ${(p.ppmP * 100).toFixed(2)}% · ${arrow(p.ppmC - p.ppmP, Math.abs((p.ppmC - p.ppmP) * 100).toFixed(2) + '%p')}` : (!p.cur.g ? '판매 없음' : !p.prv ? '비교 자료 없음' : '비교 기간 판매 없음')}</span></div>`).join('')}</div>
-    <div class="kgroup five pmcrow">${pmcCell}</div>`;
+    <div class="kgroup five pmcrow">${pmcCell}${poFcCard()}</div>`;
+  const fcc = document.getElementById('fcCard');
+  if (fcc) fcc.onclick = () => { setTab('stock', true); requestAnimationFrame(() => document.getElementById('poFc').scrollIntoView({ behavior: 'smooth', block: 'start' })); };
 
   // ---- 매출 그래프: 45일 이하는 일별, 그보다 길면 월별. 1일은 최근 14일 중 그날 강조 ----
   const B = baseOpts(), s1 = css('--s1'), s1s = css('--s1-soft');
@@ -849,48 +861,90 @@ function renderSalesTable(L) {
 
 
 /* ---- 당월 마감 예상 매입금액 ----
-   한 달 단위로 보면 쿠팡 발주금액 ≈ 판매된 상품의 매입원가 × 1.1 (VAT 포함, 매입가 기준)이라
-   이번 달 예상 매입 = 이번 달 판매원가(지금까지 실적 + 남은 날 × 최근 14일 일평균) × 1.1 */
+   ① 판매연동 = 이번 달 판매원가×1.1 (지금까지 실적 + 남은 날 × 최근 14일 일평균)
+   ② 발주비율 반영 = ① × 직전 6개월 (실제 발주금액 ÷ 판매원가×1.1)
+   쿠팡 발주는 판매원가×1.1보다 평균 10%대 많고 달마다 출렁여서 ①~② 범위로 보여줌.
+   발주금액 = 총발주 매입금 (sales/data/po_history.csv.gz + 입력 폴더 발주 파일, 월은 발주일 기준) */
+function poForecast() {
+  if (poForecast.cache) return poForecast.cache;
+  const PM = DATA.poM; if (!PM) return null;
+  const byId = new Map(DATA.skus.map(k => [String(k.id), k]));
+  const gOfId = id => byId.has(id) ? groupOf(byId.get(id)) : (SEP_BEANS.includes(+id) ? '별도 관리 원두' : '그 외');
+  const NM = PM.months.length, mIx = Object.fromEntries(PM.months.map((m, i) => [m, i]));
+  const G = [...GROUPS, '그 외'];
+  // 월별 실제 발주 (그룹별 + 전체)
+  const po = Object.fromEntries([...G, '전체'].map(g => [g, Array(NM).fill(0)]));
+  Object.entries(PM.sku).forEach(([id, mm]) => { const g = gOfId(id); Object.entries(mm).forEach(([i, v]) => { po[g][i] += v; po['전체'][i] += v; }); });
+  // 일별 판매원가×1.1 (그룹별 + 전체)
+  const cost = Object.fromEntries([...G, '전체'].map(g => [g, new Float64Array(N)]));
+  DATA.skus.forEach(k => { const a = cost[groupOf(k)], t = cost['전체']; k.c.forEach((v, i) => { if (v) { a[i] += v * 1.1; t[i] += v * 1.1; } }); });
+  const cSum = (arr, a, b) => { let s = 0; for (let i = Math.max(0, a); i <= Math.min(N - 1, b); i++) s += arr[i]; return s; };
+  const mRange = ym => { const a = DAYS.indexOf(ym + '-01'); return a < 0 ? null : [a, a + daysInMonth(ym) - 1]; };
+  // 판매연동(①): ym월 day일까지 실적 + 남은 날 × 최근 14일 일평균
+  const fc1 = (arr, ym, day) => {
+    const r = mRange(ym); if (!r) return null;
+    const asof = r[0] + Math.min(day, daysInMonth(ym)) - 1;
+    const mtd = cSum(arr, r[0], asof), daily = cSum(arr, asof - 13, asof) / 14, rem = r[1] - asof;
+    return { mtd, daily, rem, v: mtd + daily * rem };
+  };
+  const mCost = (arr, ym) => { const r = mRange(ym); return r ? cSum(arr, r[0], Math.min(r[1], N - 1)) : 0; };
+  // 직전 6개월 발주 ÷ 판매원가×1.1 (발주 자료가 있는 달만)
+  const ratioFor = (g, mi) => { let p = 0, c = 0; for (let j = Math.max(0, mi - 6); j < mi; j++) { p += po[g][j]; c += mCost(cost[g], PM.months[j]); } return c ? p / c : NaN; };
+  const ym = ASOF.slice(0, 7), day = +ASOF.slice(8), curI = ym in mIx ? mIx[ym] : NM;
+  const curRatio = ratioFor('전체', curI);
+  const rows = G.map(g => { const f = fc1(cost[g], ym, day); return { g, ...f, po: curI < NM ? po[g][curI] : 0 }; }).filter(r => r.v || r.po);
+  const t1 = fc1(cost['전체'], ym, day);
+  // 검증: 지난 달들을 같은 날짜(매월 ${day}일) 기준으로 예측했다면 실제 발주와 얼마나 맞았나
+  const back = [];
+  for (let i = 2; i < Math.min(curI, NM); i++) {
+    const m = PM.months[i], f = fc1(cost['전체'], m, day), r = ratioFor('전체', i), act = po['전체'][i], c = mCost(cost['전체'], m);
+    if (!f || !act || !isFinite(r)) continue;
+    back.push({ m, act, c, ratio: act / c, f1: f.v, f2: f.v * r, e1: f.v / act - 1, e2: f.v * r / act - 1 });
+  }
+  const stat = k => { const e = back.map(b => b[k]); return { mae: sum(e.map(Math.abs)) / e.length, bias: sum(e) / e.length, in15: e.filter(x => Math.abs(x) <= 0.15).length }; };
+  const rs = back.map(b => b.ratio);
+  const firstRatioM = PM.months[Math.max(0, curI - 6)], lastRatioM = PM.months[Math.min(curI, NM) - 1];
+  return poForecast.cache = {
+    ym, day, cut: PM.cut, rows, f1: t1.v, f2: t1.v * curRatio, ratio: curRatio, mtd: t1.mtd, daily: t1.daily, rem: t1.rem,
+    po: curI < NM ? po['전체'][curI] : 0, ratioSpan: `${+firstRatioM.slice(5)}월~${+lastRatioM.slice(5)}월`,
+    back, s1: back.length ? stat('e1') : null, s2: back.length ? stat('e2') : null,
+    rAvg: rs.length ? sum(back.map(b => b.act)) / sum(back.map(b => b.c)) : NaN, rMin: Math.min(...rs), rMax: Math.max(...rs)
+  };
+}
+const wonF = v => '₩' + nf.format(Math.round(v));
+function poFcCard() {
+  const F = poForecast(); if (!F) return '';
+  const lo = Math.min(F.f1, F.f2), hi = Math.max(F.f1, F.f2);
+  return `<div class="kcell fccard" id="fcCard" title="재고·발주 탭에서 자세히 보기"><span class="ktag">${+F.ym.slice(5)}월 마감 예상 매입금액 · 전체</span>
+      <span class="kval">${won(lo)} ~ ${won(hi)}</span>
+      <span class="ksub">판매연동 ${wonF(F.f1)} · 발주비율 반영(×${F.ratio.toFixed(2)}) ${wonF(F.f2)}<span class="pmcr">실제 발주 ${wonF(F.po)} (${md(F.ym + '-01')}~${md(F.cut)}) · 예상의 ${pct(F.po / hi, 0)}~${pct(F.po / lo, 0)} <span class="fclink">자세히 ›</span></span></span></div>`;
+}
 function renderPoForecast() {
   const el = document.getElementById('poFc'); if (!el) return;
-  const ym = ASOF.slice(0, 7), mStart = ym + '-01', mDays = daysInMonth(ym), mEnd = `${ym}-${String(mDays).padStart(2, '0')}`;
-  const i0 = DAYS.indexOf(mStart), rem = dayDiff(ASOF, mEnd), R = Math.min(14, N);
-  const lines = [...DATA.skus.flatMap(k => k.pending.map(x => ({ ...x, g: groupOf(k) }))),
-    ...(DATA.poOnly || []).flatMap(x => x.po.map(l => ({ odate: l[3], amt: l[6], conf: l[4], g: SEP_BEANS.includes(x.id) ? '별도 관리 원두' : '그 외' })))];
-  const poCut = lines.map(x => x.odate).sort().pop() || ASOF;
-  const rows = [...GROUPS, '그 외'].map(g => {
-    const S = DATA.skus.filter(k => groupOf(k) === g);
-    const mtd = i0 < 0 ? 0 : sum(S.map(k => sum(k.c.slice(i0)))) * 1.1;
-    const daily = sum(S.map(k => sum(k.c.slice(-R)))) * 1.1 / R;
-    const fc = mtd + daily * rem;
-    const po = sum(lines.filter(x => x.g === g && x.odate >= mStart && x.odate <= mEnd).map(x => x.amt));
-    return { g, mtd, daily, fc, po };
-  }).filter(r => r.fc || r.po);
-  const T = { fc: sum(rows.map(r => r.fc)), po: sum(rows.map(r => r.po)), mtd: sum(rows.map(r => r.mtd)), daily: sum(rows.map(r => r.daily)) };
-  // 지난달 검증: 발주 자료가 있는 날짜 구간에서 실제 발주 vs 판매원가×1.1
-  const pm = addDays(mStart, -1).slice(0, 7), pFirst = lines.map(x => x.odate).filter(d => d.startsWith(pm)).sort()[0];
-  let check = '';
-  if (pFirst) {
-    const a = DAYS.indexOf(pFirst), b = DAYS.indexOf(addDays(mStart, -1));
-    if (a >= 0 && b >= 0) {
-      const poP = sum(lines.filter(x => x.odate >= pFirst && x.odate < mStart).map(x => x.amt)), cP = sum(DATA.skus.map(k => sum(k.c.slice(a, b + 1)))) * 1.1;
-      check = `지난달 검증: ${md(pFirst)}~${md(DAYS[b])} 실제 발주 ${won(poP)}원 vs 같은 기간 판매원가 ${won(cP)}원 (${(poP / cP).toFixed(2)}배)`;
-    }
-  }
-  const prog = T.fc ? T.po / T.fc : 0;
+  const F = poForecast(); if (!F) { el.innerHTML = '<p class="desc" style="margin:0">발주 이력 자료가 없습니다.</p>'; return; }
+  const lo = Math.min(F.f1, F.f2), hi = Math.max(F.f1, F.f2), mS = F.ym + '-01', M = +F.ym.slice(5);
+  const err = e => `<td class="${Math.abs(e) > 0.15 ? 'fcbad' : ''}">${Math.round(e * 100) > 0 ? '+' : ''}${Math.round(e * 100) || 0}%</td>`;
+  const sline = (lab, s) => `${lab} 평균 오차 <b>${(s.mae * 100).toFixed(1)}%</b> (${s.bias < 0 ? '대체로 낮게' : '대체로 높게'} ${Math.abs(s.bias * 100).toFixed(1)}%) · ±15% 이내 <b>${s.in15}/${F.back.length}</b>개월`;
   el.innerHTML = `
     <div class="fc-head">
-      <div><span class="ktag">${+ym.slice(5)}월 마감 예상 매입금액</span>
-        <div class="fc-val">₩${nf.format(Math.round(T.fc))}</div>
-        <div class="ksub">지금까지 판매원가 ${won(T.mtd)}원 (${md(mStart)}~${md(ASOF)}) + 남은 ${rem}일 × 일평균 ${won(T.daily)}원 (최근 ${R}일 판매 기준)</div></div>
-      <div class="fc-prog"><div class="ksub">이번 달 실제 발주 (발주일 ${md(mStart)}~${md(poCut)})</div>
-        <div class="fc-po">₩${nf.format(Math.round(T.po))} <small>· 예상의 ${pct(prog, 0)}</small></div>
-        <div class="fc-bar"><i style="width:${Math.min(100, prog * 100)}%"></i></div></div>
+      <div><span class="ktag">${M}월 마감 예상 매입금액</span>
+        <div class="fc-val">${wonF(lo)} ~ ${wonF(hi)}</div>
+        <div class="ksub">① 판매연동 <b>${wonF(F.f1)}</b> = 지금까지 판매원가×1.1 ${won(F.mtd)}원 (${md(mS)}~${md(ASOF)}) + 남은 ${F.rem}일 × 일평균 ${won(F.daily)}원 (최근 14일)</div>
+        <div class="ksub">② 발주비율 반영 <b>${wonF(F.f2)}</b> = ① × ${F.ratio.toFixed(2)} (최근 6개월 ${F.ratioSpan} 실제 발주 ÷ 판매원가×1.1)</div></div>
+      <div class="fc-prog"><div class="ksub">이번 달 실제 발주 (발주일 ${md(mS)}~${md(F.cut)})</div>
+        <div class="fc-po">${wonF(F.po)} <small>· 예상의 ${pct(F.po / hi, 0)}~${pct(F.po / lo, 0)}</small></div>
+        <div class="fc-bar"><i style="width:${Math.min(100, F.po / hi * 100)}%"></i><b style="left:${lo / hi * 100}%" title="① 판매연동"></b></div>
+        <div class="ksub fc-axis"><span>0</span><span>세로선 ① ${won(lo)} · 끝 ② ${won(hi)}</span></div></div>
     </div>
-    <div class="tbl-wrap"><table class="fc-tbl"><thead><tr><th class="l">구분</th><th>마감 예상 매입</th><th>지금까지 판매원가</th><th>일평균 (최근 ${R}일)</th><th>실제 발주 (이번 달)</th><th>진도</th></tr></thead><tbody>
-      ${rows.map(r => `<tr><td class="l">${r.g}</td><td><b>${won(r.fc)}</b></td><td>${won(r.mtd)}</td><td>${won(r.daily)}</td><td>${won(r.po)}</td><td>${r.fc ? pct(r.po / r.fc, 0) : '–'}</td></tr>`).join('')}
+    <div class="tbl-wrap"><table class="fc-tbl"><thead><tr><th class="l">구분</th><th>① 판매연동 예상</th><th>지금까지 판매원가×1.1</th><th>일평균 (최근 14일)</th><th>실제 발주 (이번 달)</th><th>진도 (① 대비)</th></tr></thead><tbody>
+      ${F.rows.map(r => `<tr><td class="l">${r.g}</td><td><b>${won(r.v)}</b></td><td>${won(r.mtd)}</td><td>${won(r.daily)}</td><td>${won(r.po)}</td><td>${r.v ? pct(r.po / r.v, 0) : '–'}</td></tr>`).join('')}
+      <tr class="tot"><td class="l">합계</td><td>${won(F.f1)}</td><td>${won(F.mtd)}</td><td>${won(F.daily)}</td><td>${won(F.po)}</td><td>${pct(F.po / F.f1, 0)}</td></tr>
     </tbody></table></div>
-    <p class="desc" style="margin:0">매입금액은 VAT 포함(발주 매입가 기준)입니다. 한 달 단위로 보면 쿠팡 발주금액은 팔린 상품의 매입원가와 거의 같아서, 이번 달 판매 추이로 마감 매입을 예상합니다. ${check}. 상단 카테고리·브랜드 필터와 관계없이 전체 기준입니다.</p>`;
+    ${F.back.length ? `<details class="fc-back"><summary><b>맞는지 검증</b> · 지난 ${F.back.length}개월을 매월 ${F.day}일 기준으로 같은 방식으로 예측했을 때 — ${sline('①', F.s1)} / ${sline('②', F.s2)}</summary>
+      <div class="tbl-wrap"><table class="fc-tbl"><thead><tr><th class="l">월</th><th>실제 발주</th><th>판매원가×1.1</th><th>발주÷판매</th><th>① 예측</th><th>① 오차</th><th>② 예측</th><th>② 오차</th></tr></thead><tbody>
+      ${[...F.back].reverse().map(b => `<tr><td class="l">${b.m.slice(2, 4)}년 ${+b.m.slice(5)}월</td><td><b>${won(b.act)}</b></td><td>${won(b.c)}</td><td>${b.ratio.toFixed(2)}배</td><td>${won(b.f1)}</td>${err(b.e1)}<td>${won(b.f2)}</td>${err(b.e2)}</tr>`).join('')}
+      </tbody></table></div></details>` : ''}
+    <p class="desc" style="margin:0">매입금액은 VAT 포함 총발주 매입금(발주일 기준 월)입니다. 쿠팡 월 발주금액은 그달 판매원가×1.1의 평균 ${F.rAvg.toFixed(2)}배(${F.rMin.toFixed(2)}~${F.rMax.toFixed(2)}배)로 달마다 출렁여서 한 값 대신 범위로 보여줍니다. 오차 ±15% 넘는 달은 빨간색. 상단 카테고리·브랜드 필터와 관계없이 전체 기준입니다.</p>`;
 }
 
 /* ================= 재고·발주 ================= */

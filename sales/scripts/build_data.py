@@ -1,7 +1,8 @@
 """쿠팡 판매·재고·발주 CSV → 대시보드 데이터(JSON)
 
-사용법: python3 build_data.py <입력폴더> <출력 json> [과거판매.pkl]
-  과거판매.pkl: load_history.py로 만든 과거 판매 이력 (있으면 YoY 탭 데이터 생성)
+사용법: python3 build_data.py <입력폴더> <출력 json> [과거판매.csv.gz] [과거발주.csv.gz]
+  과거판매: load_history.py로 만든 과거 판매 이력 (있으면 YoY 탭 데이터 생성)
+  과거발주: 월별 PO_SKU_LIST를 합친 발주 이력 (있으면 월별 발주금액·마감 예상 검증에 사용)
 입력폴더에 아래 파일을 넣어두면 됨 (기간이 겹쳐도 됨, 같은 날짜는 최신 파일 기준)
   - *SALES_ANALYSIS_DAILY_PERFORMANCE*.csv  (판매분석 일별 성과)
   - basic_operation_rocket*.csv              (로켓 기본운영 재고)
@@ -13,6 +14,7 @@ import pandas as pd
 
 IN, OUT = sys.argv[1], sys.argv[2]
 HIST = sys.argv[3] if len(sys.argv) > 3 else None
+POH = sys.argv[4] if len(sys.argv) > 4 else None
 
 
 def read_hist(path):
@@ -55,6 +57,28 @@ po = pd.concat([pd.read_csv(f, encoding='utf-8-sig').assign(_rank=i) for i, f in
 if len(po):
     po = po.sort_values('_rank').drop_duplicates(['발주번호', 'SKU ID'], keep='last')
     print(f'PO: 파일 {len(pfiles)}개, {len(po)}건, 발주일 {po["발주일"].min()[:10]} ~ {po["발주일"].max()[:10]}')
+
+# 월별 발주금액(총발주 매입금, SKU별): 발주 이력 + 입력 폴더의 모든 발주 파일.
+# 같은 (발주번호, SKU)는 가장 늦게 내려받은 파일 기준 (_ts = 파일명 시각, 이력 파일은 _ts 열에 기록)
+pm_parts = []
+if POH and os.path.exists(POH):
+    pm_parts.append(pd.read_csv(POH, encoding='utf-8', low_memory=False, dtype={'_ts': str}))
+for f in sorted(glob.glob(os.path.join(IN, 'PO_SKU_LIST*.csv'))):
+    ts = ''.join(ch for ch in os.path.basename(f) if ch.isdigit())[-14:]
+    pm_parts.append(pd.read_csv(f, encoding='utf-8-sig').assign(_ts=ts))
+po_m = None
+if pm_parts:
+    pa = pd.concat([x[['_ts', '발주번호', 'SKU ID', '발주일', '총발주 매입금']] for x in pm_parts], ignore_index=True)
+    pa = pa.sort_values('_ts', kind='stable').drop_duplicates(['발주번호', 'SKU ID'], keep='last')
+    pa['m'] = pa['발주일'].astype(str).str[:7]
+    pa['dd'] = pa['발주일'].astype(str).str[:10]
+    pmonths = [p.strftime('%Y-%m') for p in pd.period_range(pa['m'].min(), pa['m'].max(), freq='M')]
+    mi = {m: i for i, m in enumerate(pmonths)}
+    bysku = {}
+    for (sid, m), v in pa.groupby(['SKU ID', 'm'])['총발주 매입금'].sum().items():
+        bysku.setdefault(str(int(sid)), {})[mi[m]] = int(v)
+    po_m = dict(months=pmonths, cut=pa['dd'].max(), sku=bysku)
+    print(f'월별 발주: {pmonths[0]} ~ {pmonths[-1]} · {len(pa):,}건 · 마지막 발주일 {po_m["cut"]} · 합계 {int(pa["총발주 매입금"].sum()):,}')
 
 # 과거 판매 이력을 앞에 이어 붙임 (최근 파일에 있는 날짜는 최근 파일 우선)
 s_recent = s
@@ -201,7 +225,7 @@ for k in skus:
 out = dict(opsOffset=ops_off, days=days, asOf=end, generated=datetime.now(timezone(timedelta(hours=9))).strftime('%Y-%m-%d %H:%M'),
            files=dict(sales=[os.path.basename(f) for f in sfiles], ops=[os.path.basename(f) for f in ofiles],
                       po=[os.path.basename(f) for f in pfiles]),
-           missingOps=missing_ops, opsStart=ops_start, skus=skus, poOnly=po_only, hist=hist)
+           missingOps=missing_ops, opsStart=ops_start, skus=skus, poOnly=po_only, hist=hist, poM=po_m)
 import gzip, base64
 raw = json.dumps(out, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
 with open(OUT, 'w', encoding='utf-8') as f:

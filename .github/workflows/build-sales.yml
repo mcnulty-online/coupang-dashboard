@@ -31,7 +31,7 @@ jobs:
         run: pip install pandas
 
       - name: 데이터 계산
-        run: python sales/scripts/build_data.py sales/input sales/data/data.b64 sales/data/history.csv.gz
+        run: python sales/scripts/build_data.py sales/input sales/data/data.b64 sales/data/history.csv.gz sales/data/po_history.csv.gz
 
       - name: 페이지 만들기
         run: python sales/scripts/render.py sales/template.html sales/data/data.b64 sales/index.html
