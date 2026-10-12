@@ -58,7 +58,7 @@ if len(po):
     po = po.sort_values('_rank').drop_duplicates(['발주번호', 'SKU ID'], keep='last')
     print(f'PO: 파일 {len(pfiles)}개, {len(po)}건, 발주일 {po["발주일"].min()[:10]} ~ {po["발주일"].max()[:10]}')
 
-# 월별 발주금액(총발주 매입금, SKU별): 발주 이력 + 입력 폴더의 모든 발주 파일.
+# 발주 이력 전체(마감 예상 매입금액용): 발주 이력 + 입력 폴더의 모든 발주 파일.
 # 같은 (발주번호, SKU)는 가장 늦게 내려받은 파일 기준 (_ts = 파일명 시각, 이력 파일은 _ts 열에 기록)
 pm_parts = []
 if POH and os.path.exists(POH):
@@ -66,19 +66,15 @@ if POH and os.path.exists(POH):
 for f in sorted(glob.glob(os.path.join(IN, 'PO_SKU_LIST*.csv'))):
     ts = ''.join(ch for ch in os.path.basename(f) if ch.isdigit())[-14:]
     pm_parts.append(pd.read_csv(f, encoding='utf-8-sig').assign(_ts=ts))
-po_m = None
+pa = None
 if pm_parts:
-    pa = pd.concat([x[['_ts', '발주번호', 'SKU ID', '발주일', '총발주 매입금']] for x in pm_parts], ignore_index=True)
+    pa = pd.concat([x[['_ts', '발주번호', 'SKU ID', '발주일', '입고예정일', '총발주 매입금', '입고금액']] for x in pm_parts], ignore_index=True)
     pa = pa.sort_values('_ts', kind='stable').drop_duplicates(['발주번호', 'SKU ID'], keep='last')
-    pa['m'] = pa['발주일'].astype(str).str[:7]
-    pa['dd'] = pa['발주일'].astype(str).str[:10]
-    pmonths = [p.strftime('%Y-%m') for p in pd.period_range(pa['m'].min(), pa['m'].max(), freq='M')]
-    mi = {m: i for i, m in enumerate(pmonths)}
-    bysku = {}
-    for (sid, m), v in pa.groupby(['SKU ID', 'm'])['총발주 매입금'].sum().items():
-        bysku.setdefault(str(int(sid)), {})[mi[m]] = int(v)
-    po_m = dict(months=pmonths, cut=pa['dd'].max(), sku=bysku)
-    print(f'월별 발주: {pmonths[0]} ~ {pmonths[-1]} · {len(pa):,}건 · 마지막 발주일 {po_m["cut"]} · 합계 {int(pa["총발주 매입금"].sum()):,}')
+    pa['od'] = pd.to_datetime(pa['발주일'].astype(str).str[:10])
+    pa['ed'] = pd.to_datetime(pa['입고예정일'].astype(str).str[:10])
+    pa['em'] = pa['ed'].dt.to_period('M')
+    po_cut = pd.Timestamp(pa['_ts'].max()[:8])          # 발주 자료 기준일 = 가장 최근 발주 파일을 내려받은 날
+    print(f'발주 이력: {len(pa):,}건 · 발주일 {pa["od"].min().date()} ~ {pa["od"].max().date()} · 자료 기준일 {po_cut.date()}')
 
 # 과거 판매 이력을 앞에 이어 붙임 (최근 파일에 있는 날짜는 최근 파일 우선)
 s_recent = s
@@ -218,6 +214,86 @@ if HIST:
     tot = sum(sum(k['g']) for k in hsku.values())
     print(f'이력: {months[0]} ~ {months[-1]} ({M}개월) · SKU {len(hsku)} · GMV {tot:,} = {int(allS["매출액(GMV)"].sum()):,} · 일별 {len(hdays)}일 × {len(daily)}그룹')
 
+# ---- 당월 마감 예상 매입금액 (입고예정일 기준 월, 입고금액) ----
+#  예상 = 입고 완료(입고예정일 ≤ 기준일, 입고금액)
+#       + 입고 예정(이미 발주됐고 이번 달 안에 입고 예정, 총발주 매입금 × 입고 반영률)
+#       + 추가 발주분(아직 발주 전이지만 리드타임 7일 안에 들어와 이번 달 입고될 날 수 × 최근 14일 판매원가×1.1 일평균 × 입고/판매 비율)
+#  반영률·비율은 직전 6개월 실적. 지난 달들을 같은 날짜 기준으로 다시 예측해 오차도 같이 저장.
+SEP_BEANS = {80661387, 80686777, 80855135, 80855134, 80855137}
+ETC_SUB = {'Kitchen Appliance', 'Tools & Gadgets'}
+FC_GROUPS = ['커피/차', '음료', '별도 관리 원두', '기타', '그 외']
+LEAD = 7
+po_fc = None
+if pa is not None:
+    kby = {k['id']: k for k in skus}
+    def group_of(sid):
+        sid = int(sid)
+        if sid in SEP_BEANS: return '별도 관리 원두'
+        k = kby.get(sid)
+        if k is None: return '그 외'
+        if k.get('sub') in ETC_SUB: return '기타'
+        return {'커피': '커피/차', '음료': '음료'}.get(k['grp'], '그 외')
+    pa['g'] = pa['SKU ID'].map(group_of)
+    s['fg'] = s['SKU ID'].map(group_of)
+    cg = (s.groupby([pd.to_datetime(s['d']), 'fg'])['매입원가(COGS)'].sum().unstack(fill_value=0) * 1.1).reindex(columns=FC_GROUPS, fill_value=0)
+    cg = cg.reindex(pd.date_range(cg.index.min(), end), fill_value=0)
+    cg['전체'] = cg[FC_GROUPS].sum(axis=1)
+    send0 = pd.Timestamp(end); lag = (po_cut - send0).days          # 판매 자료가 발주 자료보다 며칠 늦은지
+    first_m = pa['od'].min().to_period('M') + 2                      # 이 달부터 입고 실적이 온전함
+    by_em = {m: g for m, g in pa.groupby('em')}
+    def actual(m): return float(by_em[m]['입고금액'].sum()) if m in by_em else 0.0
+    def mcost(m): return float(cg['전체'][m.start_time:m.end_time.normalize()].sum())
+    def at(m, day):
+        """m월 day일 기준으로 알 수 있었던 값"""
+        ms, me = m.start_time, m.end_time.normalize()
+        cut = ms + pd.Timedelta(days=min(day, m.days_in_month) - 1); send = cut - pd.Timedelta(days=lag)
+        x = by_em.get(m, pa.iloc[:0]); x = x[x['od'] <= cut]
+        done, sched = x[x['ed'] <= cut], x[x['ed'] > cut]
+        prev = [p for p in pd.period_range(m - 6, m - 1, freq='M') if p >= first_m]
+        if not prev: return None
+        rin = sum(actual(p) for p in prev) / sum(mcost(p) for p in prev)
+        sS = sI = 0.0
+        for p in prev:
+            pc = p.start_time + pd.Timedelta(days=min(day, p.days_in_month) - 1)
+            y = by_em.get(p, pa.iloc[:0]); y = y[(y['od'] <= pc) & (y['ed'] > pc)]
+            sS += y['총발주 매입금'].sum(); sI += y['입고금액'].sum()
+        fill = sI / sS if sS else 1.0
+        newdays = max(0, (me - cut).days - LEAD)
+        daily = cg.loc[send - pd.Timedelta(days=13):send].mean() if send >= cg.index[0] else cg.iloc[:0].sum()
+        rows = []
+        for g in FC_GROUPS + ['전체']:
+            sel = (lambda d: d) if g == '전체' else (lambda d, g=g: d[d['g'] == g])
+            R = float(sel(done)['입고금액'].sum()); S = float(sel(sched)['총발주 매입금'].sum())
+            new = newdays * float(daily.get(g, 0)) * rin
+            rows.append(dict(g=g, R=R, S=S, Sf=S * fill, new=new, est=R + S * fill + new, daily=float(daily.get(g, 0))))
+        return dict(cut=cut, send=send, rin=rin, fill=fill, newdays=newdays, rows=rows, sched=sched, est=rows[-1]['est'])
+    cur_m = po_cut.to_period('M')
+    back_ms = [m for m in pd.period_range(first_m + 1, cur_m - 1, freq='M')]
+    def backtest(day):
+        out_ = []
+        for m in back_ms:
+            f = at(m, day); act = actual(m)
+            if f and act: out_.append(dict(m=str(m), act=act, est=f['est'], R=f['rows'][-1]['R'], Sf=f['rows'][-1]['Sf'], new=f['rows'][-1]['new'], e=f['est'] / act - 1))
+        return out_
+    def stat(b):
+        e = [x['e'] for x in b]
+        return dict(n=len(e), mae=round(float(sum(map(abs, e)) / len(e)), 4), bias=round(float(sum(e) / len(e)), 4), mx=round(float(max(map(abs, e))), 4), in10=int(sum(abs(x) <= .10 for x in e)), in15=int(sum(abs(x) <= .15 for x in e)))
+    cday = po_cut.day
+    F = at(cur_m, cday); B = backtest(cday)
+    sched_by_day = F['sched'].groupby(F['sched']['ed'].dt.strftime('%Y-%m-%d'))['총발주 매입금'].sum()
+    r = lambda v: int(round(v))
+    po_fc = dict(month=str(cur_m), cut=po_cut.strftime('%Y-%m-%d'), salesEnd=F['send'].strftime('%Y-%m-%d'), lead=LEAD,
+                 rin=round(float(F['rin']), 4), fill=round(float(F['fill']), 4), newdays=int(F['newdays']),
+                 groups=[dict(g=x['g'], R=r(x['R']), S=r(x['S']), Sf=r(x['Sf']), new=r(x['new']), est=r(x['est']), daily=r(x['daily'])) for x in F['rows']],
+                 sched=[[d, r(v)] for d, v in sched_by_day.items()],
+                 back=[dict(m=x['m'], act=r(x['act']), est=r(x['est']), R=r(x['R']), Sf=r(x['Sf']), new=r(x['new']), e=round(float(x['e']), 4)) for x in B],
+                 stat=stat(B) if B else None,
+                 byDay=[dict(day=d, **stat(backtest(d))) for d in [5, 10, 15, 20, 25]])
+    T = F['rows'][-1]
+    print(f'마감 예상({cur_m}, {po_cut.date()} 기준): 입고완료 {T["R"]/1e8:.2f}억 + 입고예정 {T["S"]/1e8:.2f}억×{F["fill"]:.2f} + 추가 {F["newdays"]}일×{T["daily"]/1e4:,.0f}만×{F["rin"]:.2f} = {T["est"]/1e8:.2f}억'
+          + (f' · 검증 {po_fc["stat"]["n"]}개월 평균 오차 {po_fc["stat"]["mae"]*100:.1f}%' if B else ''))
+    print('  날짜별 평균 오차:', ' · '.join(f'{x["day"]}일 {x["mae"]*100:.1f}%' for x in po_fc['byDay']))
+
 ops_off = days.index(ops_start)
 for k in skus:
     for f in OPSF + ['so']:
@@ -225,7 +301,7 @@ for k in skus:
 out = dict(opsOffset=ops_off, days=days, asOf=end, generated=datetime.now(timezone(timedelta(hours=9))).strftime('%Y-%m-%d %H:%M'),
            files=dict(sales=[os.path.basename(f) for f in sfiles], ops=[os.path.basename(f) for f in ofiles],
                       po=[os.path.basename(f) for f in pfiles]),
-           missingOps=missing_ops, opsStart=ops_start, skus=skus, poOnly=po_only, hist=hist, poM=po_m)
+           missingOps=missing_ops, opsStart=ops_start, skus=skus, poOnly=po_only, hist=hist, poFc=po_fc)
 import gzip, base64
 raw = json.dumps(out, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
 with open(OUT, 'w', encoding='utf-8') as f:
