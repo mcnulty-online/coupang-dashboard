@@ -125,13 +125,18 @@ for sid, gdf in lv.groupby('SKU ID'):
     meta[sid]['reviews'] = n
     meta[sid]['rating'] = round(float((gdf['평균 상품 평점'] * gdf['상품평 수']).sum() / n), 2) if n else None
 
-# 발주 라인 (SKU별)
+# 발주 라인 (SKU별) · 발주금액은 VAT 제외 (총발주 매입금 × 공급가/매입가, 공급가 없으면 ÷1.1)
+def vat_ex(r):
+    try:
+        if r['매입가'] > 0 and r['공급가'] == r['공급가']: return int(round(r['총발주 매입금'] * r['공급가'] / r['매입가']))
+    except KeyError: pass
+    return int(round(r['총발주 매입금'] / 1.1))
 po_lines = {}
 po_only = []
 if len(po):
     for sid, g in po.groupby('SKU ID'):
         po_lines[sid] = [[int(r['발주번호']), r['물류센터'], r['입고예정일'], r['발주일'][:10], int(r['확정수량']), int(r['입고수량']),
-                          int(r['총발주 매입금']), r['발주현황'], r['발주유형']] for _, r in g.sort_values('입고예정일').iterrows()]
+                          vat_ex(r), r['발주현황'], r['발주유형']] for _, r in g.sort_values('입고예정일').iterrows()]
         if sid not in meta:
             po_only.append(dict(id=int(sid), name=g['SKU 이름'].iloc[0], po=po_lines[sid]))
 
