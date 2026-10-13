@@ -857,7 +857,7 @@ function renderSales(L) {
   const f = (DATA.files.sales || []).slice().sort().pop(), a = document.getElementById('rawDl'); if (!f || !a) return;
   const ts = (f.match(/(\d{14})\.csv$/) || [])[1];
   a.href = 'input/' + encodeURIComponent(f); a.download = f; a.hidden = false; a.title = f;
-  a.innerHTML = `⬇ 판매 원본 CSV 받기<small>${ts ? `${+ts.slice(4, 6)}/${+ts.slice(6, 8)} ${ts.slice(8, 10)}:${ts.slice(10, 12)} 업로드` : f}</small>`;
+  a.innerHTML = `⬇ 판매 현황 raw data<small>${ts ? `${+ts.slice(4, 6)}/${+ts.slice(6, 8)} ${ts.slice(8, 10)}:${ts.slice(10, 12)} 업로드` : f}</small>`;
 })();
 function initSalesFilters() {
   document.getElementById('sfGrpTag').onclick = () => { state.sf.grp = ''; markGrpCards(); renderSalesTable(list()); };
