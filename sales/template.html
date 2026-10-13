@@ -221,6 +221,30 @@ h2.sec .note { font-weight: 400; }
 .fc-bar { height: 8px; background: var(--grid); border-radius: 4px; overflow: hidden; }
 .fc-bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
 .fc-tbl td, .fc-tbl th { font-size: 13px; }
+#winRow { position: relative; }
+.calbtn { display: inline-flex; align-items: center; gap: 6px; }
+.calbtn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+.calpop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; max-height: calc(100dvh - 190px); overflow: auto; overscroll-behavior: contain; width: min(600px, calc(100vw - 32px)); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.16); padding: 14px 16px 12px; display: grid; gap: 10px; }
+.calhd { display: grid; gap: 8px; }
+.calrng { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.calrng b { color: var(--ink); } .calrng i { color: var(--muted); font-style: normal; font-weight: 500; }
+.calpre { display: flex; flex-wrap: wrap; gap: 6px; } .calpre .chip { font-size: 12px; padding: 3px 10px; }
+.calnav { display: flex; align-items: center; gap: 4px; }
+.calnav button { font: inherit; font-size: 16px; line-height: 1; width: 28px; height: 28px; border: 0; background: none; color: var(--ink-2); border-radius: 6px; cursor: pointer; }
+.calnav button:hover { background: var(--grid); color: var(--ink); }
+.calhint { flex: 1; text-align: center; font-size: 12px; color: var(--muted); }
+.calms { display: flex; flex-wrap: wrap; gap: 8px 28px; }
+.calm { flex: 1 1 240px; min-width: 0; }
+.calmt { display: block; margin: 0 auto 6px; font: inherit; font-size: 14px; font-weight: 700; color: var(--ink); background: none; border: 0; border-radius: 6px; padding: 3px 8px; cursor: pointer; }
+.calmt:hover { background: var(--grid); }
+.calg { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 2px; text-align: center; }
+.calg .wh { font-size: 11px; color: var(--muted); padding: 4px 0; } .calg .sun { color: var(--crit-ink); }
+.calg .cd { font: inherit; font-size: 13px; font-variant-numeric: tabular-nums; height: 32px; border: 0; background: none; color: var(--ink); cursor: pointer; border-radius: 6px; }
+.calg .cd:hover:not(.off) { outline: 1px solid var(--accent); }
+.calg .cd.off { color: var(--line); cursor: default; }
+.calg .cd.in { background: var(--accent-soft, #e3efe9); border-radius: 0; }
+.calg .cd.st, .calg .cd.en { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.calg .cd.asof:not(.st):not(.en) { box-shadow: inset 0 0 0 1px var(--accent); }
 .kcell.kclick { cursor: pointer; transition: background .12s; }
 .kcell.kclick:hover { background: var(--grid); }
 .kcell.kon { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); box-shadow: inset 0 -3px 0 var(--accent); }
@@ -273,8 +297,8 @@ table.heat td.l { text-align: left; }
 .drawer-body { flex: 1; overflow: auto; overscroll-behavior: contain; padding-bottom: env(safe-area-inset-bottom, 0px); }
 .drawer .dpanel { position: static; max-width: none; }
 @media (max-width: 700px) { .drawer-panel { width: 100vw; } .drawer-bar { padding-inline: 16px; } .drawer .dpanel { padding-inline: 16px; } }
-#winSel, .pastsel { width: 150px; max-width: 100%; text-overflow: ellipsis; font: inherit; font-size: 13px; border-radius: 999px; padding: 4px 10px; }
-#winSel.on, .pastsel.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.pastsel { width: 150px; max-width: 100%; text-overflow: ellipsis; font: inherit; font-size: 13px; border-radius: 999px; padding: 4px 10px; }
+.pastsel.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .stlegend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 12px; color: var(--ink-2); }
 .stlegend .pill { margin-left: 6px; }
 .stlegend .flabel { margin-right: 2px; }
@@ -563,11 +587,11 @@ const WINS = [
 // 그래프에서 누른 날짜: state.win = 'day:YYYY-MM-DD' (기준일이면 '당일'로)
 function dayWin(id) {
   const d = id.slice(4), i = DAYS.indexOf(d); if (i < 0) return null;
-  return { id, label: `${md(d)}(${wd(d)})`, i0: i, i1: i, prev: i > 0 ? [i - 1, i - 1] : null, prevLabel: '전일' };
+  return { id, label: `${d.slice(0, 4) === ASOF.slice(0, 4) ? '' : d.slice(2, 4) + '년 '}${md(d)}(${wd(d)})`, i0: i, i1: i, prev: i > 0 ? [i - 1, i - 1] : null, prevLabel: '전일' };
 }
 function pickDay(d) { state.win = d === ASOF ? 'd1' : 'day:' + d; applyWindow(); renderAll(); }
 function applyWindow() {
-  const w = (state.win.startsWith('day:') && dayWin(state.win)) || WINS.find(x => x.id === state.win) || WINS[1]; state.prev = w.prev; state.prevLabel = w.prevLabel;
+  const w = (state.win.startsWith('day:') && dayWin(state.win)) || (state.win.startsWith('rng:') && rngWin(state.win)) || WINS.find(x => x.id === state.win) || WINS[1]; state.prev = w.prev; state.prevLabel = w.prevLabel;
   state.i0 = w.i0; state.i1 = w.i1; state.W = w.i1 - w.i0 + 1; state.wLabel = w.label;
   const sl = a => a.slice(w.i0, w.i1 + 1);
   DATA.skus.forEach(k => {
@@ -602,13 +626,76 @@ const winBox = document.getElementById('winChips');
 WINS.filter(w => w.quick).forEach(w => { const b = document.createElement('button'); b.className = 'chip'; b.id = 'win-' + w.id; b.textContent = w.label;
   b.onclick = () => { state.win = w.id; applyWindow(); renderAll(); }; winBox.appendChild(b); });
 // 지난 기간: 연도·월별 드롭다운
-const winSel = document.createElement('select'); winSel.id = 'winSel'; winSel.setAttribute('aria-label', '지난 기간 선택');
-winSel.innerHTML = '<option value="">지난 기간 ▾</option>' + ['연도', '월별'].map(g => `<optgroup label="${g}">${WINS.filter(w => !w.quick && w.grp === g).map(w => `<option value="${w.id}">${w.label}</option>`).join('')}</optgroup>`).join('');
-const dayChip = document.createElement('button'); dayChip.className = 'chip daychip'; dayChip.id = 'win-day'; dayChip.hidden = true;
-dayChip.title = '선택한 날짜 해제 (당일로)'; dayChip.onclick = () => { state.win = 'd1'; applyWindow(); renderAll(); };
-winBox.appendChild(dayChip);
-winSel.onchange = () => { if (!winSel.value) return; state.win = winSel.value; applyWindow(); renderAll(); };
-winBox.appendChild(winSel);
+/* ---- 지난 기간: 달력에서 시작일~종료일 선택 (두 달씩 보기) ----
+   한 날짜 → 'day:', 월·연도와 정확히 같으면 그 기간(전월·작년 비교), 그 외 'rng:시작:끝' (직전 같은 길이와 비교) */
+function rngWin(id) {
+  const [, a, b] = id.split(':'), i0 = DAYS.indexOf(a), i1 = DAYS.indexOf(b); if (i0 < 0 || i1 < i0) return null;
+  const L = i1 - i0 + 1, yr = d => d.slice(0, 4) === ASOF.slice(0, 4) ? '' : `${d.slice(2, 4)}년 `;
+  return { id, label: `${yr(a)}${md(a)}~${a.slice(0, 4) === b.slice(0, 4) ? '' : yr(b)}${md(b)}`, i0, i1, prev: i0 - L >= 0 ? [i0 - L, i0 - 1] : null, prevLabel: '직전 같은 기간' };
+}
+function setRange(a, b) {
+  if (b < a) [a, b] = [b, a];
+  a = a < DAYS[0] ? DAYS[0] : a; b = b > ASOF ? ASOF : b;
+  if (a === b) return pickDay(a);
+  const w = WINS.find(x => DAYS[x.i0] === a && DAYS[x.i1] === b);
+  state.win = w ? w.id : `rng:${a}:${b}`; applyWindow(); renderAll();
+}
+const ymAdd = (ym, n) => { const d = new Date(+ym.slice(0, 4), +ym.slice(5, 7) - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+const calBtn = document.createElement('button'); calBtn.className = 'chip calbtn'; calBtn.id = 'calBtn'; calBtn.setAttribute('aria-haspopup', 'dialog');
+const calPop = document.createElement('div'); calPop.className = 'calpop'; calPop.id = 'calPop'; calPop.hidden = true; calPop.setAttribute('role', 'dialog'); calPop.setAttribute('aria-label', '기간 달력');
+winBox.appendChild(calBtn); document.getElementById('winRow').appendChild(calPop);
+const cal = { a: null, b: null, hover: null, view: null };
+const MIN_YM = DAYS[0].slice(0, 7), MAX_YM = ASOF.slice(0, 7);
+function openCal() {
+  const cur = { i0: state.i0, i1: state.i1 };
+  cal.a = DAYS[cur.i0]; cal.b = DAYS[cur.i1]; cal.hover = null;
+  cal.view = ymAdd(cal.b.slice(0, 7), -1) < MIN_YM ? MIN_YM : ymAdd(cal.b.slice(0, 7), -1);
+  if (cal.view > ymAdd(MAX_YM, -1)) cal.view = ymAdd(MAX_YM, -1) < MIN_YM ? MIN_YM : ymAdd(MAX_YM, -1);
+  calPop.hidden = false; calBtn.setAttribute('aria-expanded', 'true'); drawCal();
+}
+function closeCal() { calPop.hidden = true; calBtn.setAttribute('aria-expanded', 'false'); }
+calBtn.onclick = e => { e.stopPropagation(); calPop.hidden ? openCal() : closeCal(); };
+document.addEventListener('click', e => { if (!calPop.hidden && !calPop.contains(e.target) && e.target !== calBtn) closeCal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !calPop.hidden) closeCal(); });
+function drawCal() {
+  const lastY = ymAdd(MAX_YM, -1) < MIN_YM ? MIN_YM : ymAdd(MAX_YM, -1);
+  cal.view = cal.view < MIN_YM ? MIN_YM : cal.view > lastY ? lastY : cal.view;
+  const lo = cal.a && !cal.b && cal.hover ? (cal.hover < cal.a ? cal.hover : cal.a) : cal.a,
+        hi = cal.a && !cal.b && cal.hover ? (cal.hover < cal.a ? cal.a : cal.hover) : cal.b;
+  const month = ym => {
+    const first = new Date(+ym.slice(0, 4), +ym.slice(5, 7) - 1, 1).getDay(), n = daysInMonth(ym);
+    const cells = Array(first).fill('<span></span>');
+    for (let d = 1; d <= n; d++) {
+      const ds = `${ym}-${String(d).padStart(2, '0')}`, off = ds < DAYS[0] || ds > ASOF;
+      const cls = ['cd', off ? 'off' : '', lo && hi && ds > lo && ds < hi ? 'in' : '', ds === lo ? 'st' : '', ds === hi ? 'en' : '', ds === ASOF ? 'asof' : '',
+        new Date(ds + 'T00:00:00').getDay() === 0 ? 'sun' : ''].filter(Boolean).join(' ');
+      cells.push(`<button type="button" class="${cls}" data-d="${ds}"${off ? ' disabled' : ''}>${d}</button>`);
+    }
+    return `<div class="calm"><button type="button" class="calmt" data-m="${ym}" title="${+ym.slice(5)}월 전체 선택">${ym.slice(0, 4)}년 ${+ym.slice(5)}월</button>
+      <div class="calg">${'일월화수목금토'.split('').map((w, i) => `<span class="wh${i === 0 ? ' sun' : ''}">${w}</span>`).join('')}${cells.join('')}</div></div>`;
+  };
+  const fmt = d => d ? `${d}(${wd(d)})` : '종료일 선택';
+  const yesterday = DAYS[N - 2], lm = ymAdd(MAX_YM, -1);
+  const presets = [['어제', yesterday, yesterday], ['최근 7일', DAYS[Math.max(0, N - 7)], ASOF], ['최근 30일', DAYS[Math.max(0, N - 30)], ASOF],
+    ['지난달', `${lm}-01`, `${lm}-${String(daysInMonth(lm)).padStart(2, '0')}`],
+    ...WINS.filter(w => w.grp === '연도' && !w.quick).map(w => [w.label.replace(/ \(.*\)/, ''), DAYS[w.i0], DAYS[w.i1]])];
+  calPop.innerHTML = `
+    <div class="calhd"><span class="calrng"><b>${fmt(cal.a)}</b> → <b>${cal.b ? fmt(cal.b) : '<i>종료일 선택</i>'}</b></span>
+      <div class="calpre">${presets.map(([l, a, b]) => `<button type="button" class="chip" data-a="${a}" data-b="${b}">${l}</button>`).join('')}</div></div>
+    <div class="calnav"><button type="button" data-n="-12" title="1년 전">«</button><button type="button" data-n="-1" title="이전 달">‹</button>
+      <span class="calhint">${cal.a && !cal.b ? '종료일을 누르세요' : '시작일을 누르세요 · 월 이름을 누르면 그 달 전체'}</span>
+      <button type="button" data-n="1" title="다음 달">›</button><button type="button" data-n="12" title="1년 뒤">»</button></div>
+    <div class="calms">${month(cal.view)}${ymAdd(cal.view, 1) <= MAX_YM ? month(ymAdd(cal.view, 1)) : ''}</div>`;
+  calPop.querySelectorAll('.calnav [data-n]').forEach(b => b.onclick = e => { e.stopPropagation(); cal.view = ymAdd(cal.view, +b.dataset.n); drawCal(); });
+  calPop.querySelectorAll('.calpre [data-a]').forEach(b => b.onclick = () => { closeCal(); setRange(b.dataset.a, b.dataset.b); });
+  calPop.querySelectorAll('.calmt').forEach(b => b.onclick = () => { const m = b.dataset.m; closeCal(); setRange(`${m}-01`, `${m}-${String(daysInMonth(m)).padStart(2, '0')}`); });
+  calPop.querySelectorAll('.cd:not(.off)').forEach(b => {
+    b.onclick = e => { e.stopPropagation(); const d = b.dataset.d;
+      if (!cal.a || cal.b) { cal.a = d; cal.b = null; cal.hover = null; drawCal(); }
+      else { const a = cal.a; closeCal(); setRange(a, d); } };
+    b.onmouseenter = () => { if (cal.a && !cal.b && cal.hover !== b.dataset.d) { cal.hover = b.dataset.d; drawCal(); } };
+  });
+}
 const chipBox = document.getElementById('grpChips');
 ['전체', '커피', '음료', '기타'].forEach(g => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = g; b.id = 'grp-' + g;
   b.onclick = () => { state.grp = g; renderAll(); }; chipBox.appendChild(b); });
@@ -1480,9 +1567,9 @@ document.addEventListener('click', e => {
 });
 
 function renderAll() {
-  document.querySelectorAll('#winChips .chip').forEach(c => c.setAttribute('aria-pressed', c.id === 'win-' + state.win || (c.id === 'win-day' && state.win.startsWith('day:'))));
-  const dc = document.getElementById('win-day'); dc.hidden = !state.win.startsWith('day:'); if (!dc.hidden) dc.textContent = state.wLabel + ' ✕';
-  const ws = document.getElementById('winSel'); ws.value = WINS.find(w => w.id === state.win && !w.quick) ? state.win : ''; ws.classList.toggle('on', !!ws.value);
+  const quick = WINS.some(w => w.quick && w.id === state.win);
+  document.querySelectorAll('#winChips .chip').forEach(c => c.setAttribute('aria-pressed', c.id === 'win-' + state.win || (c.id === 'calBtn' && !quick)));
+  calBtn.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"/></svg>${quick ? '지난 기간' : esc(state.wLabel)}`;
   document.querySelectorAll('#grpChips .chip').forEach(c => c.setAttribute('aria-pressed', c.textContent === state.grp));
   bs.value = state.brand;
   document.getElementById('period').innerHTML = state.tab === 'stock' ? `기준일 <b>${ASOF} (${wd(ASOF)})</b> · 재고·발주는 기준일 기준` : `기준일 <b>${ASOF} (${wd(ASOF)})</b> · 선택 기간 ${(d => d.slice(0, 4) === ASOF.slice(0, 4) ? md(d) : `${d.slice(2, 4)}년 ${md(d)}`)(DAYS[state.i0])}~${md(DAYS[state.i1])} (${state.W}일)`;
