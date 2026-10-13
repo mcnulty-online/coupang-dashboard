@@ -68,7 +68,7 @@ for f in sorted(glob.glob(os.path.join(IN, 'PO_SKU_LIST*.csv'))):
     pm_parts.append(pd.read_csv(f, encoding='utf-8-sig').assign(_ts=ts))
 pa = None
 if pm_parts:
-    pa = pd.concat([x[['_ts', '발주번호', 'SKU ID', '발주일', '입고예정일', '총발주 매입금', '입고금액']] for x in pm_parts], ignore_index=True)
+    pa = pd.concat([x[['_ts', '발주번호', '발주현황', 'SKU ID', '발주일', '입고예정일', '총발주 매입금', '입고금액']] for x in pm_parts], ignore_index=True)
     pa = pa.sort_values('_ts', kind='stable').drop_duplicates(['발주번호', 'SKU ID'], keep='last')
     pa['od'] = pd.to_datetime(pa['발주일'].astype(str).str[:10])
     pa['ed'] = pd.to_datetime(pa['입고예정일'].astype(str).str[:10])
@@ -223,6 +223,7 @@ SEP_BEANS = {80661387, 80686777, 80855135, 80855134, 80855137}
 ETC_SUB = {'Kitchen Appliance', 'Tools & Gadgets'}
 FC_GROUPS = ['커피/차', '음료', '별도 관리 원두', '기타', '그 외']
 LEAD = 7
+FINAL_ST = {'거래명세서확인요청', '거래명세서확인'}   # 입고 처리가 끝난 발주 상태
 po_fc = None
 if pa is not None:
     kby = {k['id']: k for k in skus}
@@ -243,12 +244,19 @@ if pa is not None:
     by_em = {m: g for m, g in pa.groupby('em')}
     def actual(m): return float(by_em[m]['입고금액'].sum()) if m in by_em else 0.0
     def mcost(m): return float(cg['전체'][m.start_time:m.end_time.normalize()].sum())
-    def at(m, day):
+    # 발주 자료를 내려받은 시각 이후에 그날 더 나올 발주 비중 (쿠팡 발주는 8~17시에 걸쳐 나옴, 최근 6개월 금액 기준)
+    dl_ts = pa['_ts'].max(); dl_sec = int(dl_ts[8:10]) * 3600 + int(dl_ts[10:12]) * 60
+    tod = pd.to_datetime(pa['발주일'].astype(str), errors='coerce'); recent = tod >= po_cut - pd.Timedelta(days=183)
+    tsec = tod.dt.hour * 3600 + tod.dt.minute * 60
+    today_left = float(pa.loc[recent & (tsec > dl_sec), '총발주 매입금'].sum() / pa.loc[recent, '총발주 매입금'].sum())
+    def at(m, day, left=0.0):
         """m월 day일 기준으로 알 수 있었던 값"""
         ms, me = m.start_time, m.end_time.normalize()
         cut = ms + pd.Timedelta(days=min(day, m.days_in_month) - 1); send = cut - pd.Timedelta(days=lag)
         x = by_em.get(m, pa.iloc[:0]); x = x[x['od'] <= cut]
         done, sched = x[x['ed'] <= cut], x[x['ed'] > cut]
+        # 기준일(=발주 자료 내려받은 날)에 입고 예정인데 아직 입고 처리가 덜 끝난 줄: 받은 만큼은 입고 완료, 나머지는 입고 예정으로
+        today = done[(done['ed'] == cut) & ~done['발주현황'].isin(FINAL_ST)]
         prev = [p for p in pd.period_range(m - 6, m - 1, freq='M') if p >= first_m]
         if not prev: return None
         rin = sum(actual(p) for p in prev) / sum(mcost(p) for p in prev)
@@ -258,15 +266,17 @@ if pa is not None:
             y = by_em.get(p, pa.iloc[:0]); y = y[(y['od'] <= pc) & (y['ed'] > pc)]
             sS += y['총발주 매입금'].sum(); sI += y['입고금액'].sum()
         fill = sI / sS if sS else 1.0
-        newdays = max(0, (me - cut).days - LEAD)
+        newdays = max(0, (me - cut).days - LEAD) + (left if (me - cut).days > LEAD else 0)   # left: 기준일 중 아직 안 나온 발주분
         daily = cg.loc[send - pd.Timedelta(days=13):send].mean() if send >= cg.index[0] else cg.iloc[:0].sum()
         rows = []
         for g in FC_GROUPS + ['전체']:
             sel = (lambda d: d) if g == '전체' else (lambda d, g=g: d[d['g'] == g])
             R = float(sel(done)['입고금액'].sum()); S = float(sel(sched)['총발주 매입금'].sum())
+            td = sel(today); tRaw = float((td['총발주 매입금'] - td['입고금액']).clip(lower=0).sum())
+            tF = float((td['총발주 매입금'] * fill - td['입고금액']).clip(lower=0).sum())
             new = newdays * float(daily.get(g, 0)) * rin
-            rows.append(dict(g=g, R=R, S=S, Sf=S * fill, new=new, est=R + S * fill + new, daily=float(daily.get(g, 0))))
-        return dict(cut=cut, send=send, rin=rin, fill=fill, newdays=newdays, rows=rows, sched=sched, est=rows[-1]['est'])
+            rows.append(dict(g=g, R=R, S=S + tRaw, Sf=S * fill + tF, new=new, est=R + S * fill + tF + new, daily=float(daily.get(g, 0))))
+        return dict(cut=cut, send=send, rin=rin, fill=fill, newdays=newdays, rows=rows, sched=sched, today=today, est=rows[-1]['est'])
     cur_m = po_cut.to_period('M')
     back_ms = [m for m in pd.period_range(first_m + 1, cur_m - 1, freq='M')]
     def backtest(day):
@@ -279,18 +289,21 @@ if pa is not None:
         e = [x['e'] for x in b]
         return dict(n=len(e), mae=round(float(sum(map(abs, e)) / len(e)), 4), bias=round(float(sum(e) / len(e)), 4), mx=round(float(max(map(abs, e))), 4), in10=int(sum(abs(x) <= .10 for x in e)), in15=int(sum(abs(x) <= .15 for x in e)))
     cday = po_cut.day
-    F = at(cur_m, cday); B = backtest(cday)
+    F = at(cur_m, cday, today_left); B = backtest(cday)
     sched_by_day = F['sched'].groupby(F['sched']['ed'].dt.strftime('%Y-%m-%d'))['총발주 매입금'].sum()
+    t_rem = float((F['today']['총발주 매입금'] - F['today']['입고금액']).clip(lower=0).sum())
+    if t_rem > 0: sched_by_day = pd.concat([pd.Series({po_cut.strftime('%Y-%m-%d'): t_rem}), sched_by_day])
     r = lambda v: int(round(v))
     po_fc = dict(month=str(cur_m), cut=po_cut.strftime('%Y-%m-%d'), salesEnd=F['send'].strftime('%Y-%m-%d'), lead=LEAD,
-                 rin=round(float(F['rin']), 4), fill=round(float(F['fill']), 4), newdays=int(F['newdays']),
+                 rin=round(float(F['rin']), 4), fill=round(float(F['fill']), 4), newdays=round(float(F['newdays']), 2), todayLeft=round(today_left, 3),
+                 dl=f'{dl_ts[:4]}-{dl_ts[4:6]}-{dl_ts[6:8]} {dl_ts[8:10]}:{dl_ts[10:12]}',
                  groups=[dict(g=x['g'], R=r(x['R']), S=r(x['S']), Sf=r(x['Sf']), new=r(x['new']), est=r(x['est']), daily=r(x['daily'])) for x in F['rows']],
                  sched=[[d, r(v)] for d, v in sched_by_day.items()],
                  back=[dict(m=x['m'], act=r(x['act']), est=r(x['est']), R=r(x['R']), Sf=r(x['Sf']), new=r(x['new']), e=round(float(x['e']), 4)) for x in B],
                  stat=stat(B) if B else None,
                  byDay=[dict(day=d, **stat(backtest(d))) for d in [5, 10, 15, 20, 25]])
     T = F['rows'][-1]
-    print(f'마감 예상({cur_m}, {po_cut.date()} 기준): 입고완료 {T["R"]/1e8:.2f}억 + 입고예정 {T["S"]/1e8:.2f}억×{F["fill"]:.2f} + 추가 {F["newdays"]}일×{T["daily"]/1e4:,.0f}만×{F["rin"]:.2f} = {T["est"]/1e8:.2f}억'
+    print(f'마감 예상({cur_m}, {po_cut.date()} 기준): 입고완료 {T["R"]/1e8:.2f}억 + 입고예정 {T["S"]/1e8:.2f}억×{F["fill"]:.2f} + 추가 {F["newdays"]:.2f}일(오늘 남은 발주 {today_left:.0%} 포함)×{T["daily"]/1e4:,.0f}만×{F["rin"]:.2f} = {T["est"]/1e8:.2f}억'
           + (f' · 검증 {po_fc["stat"]["n"]}개월 평균 오차 {po_fc["stat"]["mae"]*100:.1f}%' if B else ''))
     print('  날짜별 평균 오차:', ' · '.join(f'{x["day"]}일 {x["mae"]*100:.1f}%' for x in po_fc['byDay']))
 
