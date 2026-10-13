@@ -51,6 +51,11 @@ header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; 
 .title-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
 h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
 .period { color: var(--ink-2); font-size: 13px; }
+.meta-r { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.rawdl { font-size: 12px; font-weight: 600; color: var(--accent); text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; background: var(--surface); }
+.rawdl:hover { border-color: var(--accent); }
+.rawdl small { font-weight: 500; color: var(--muted); margin-left: 4px; }
+@media (max-width: 700px) { .meta-r { align-items: flex-start; } }
 .filters { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
 .flabel { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -298,7 +303,7 @@ table.heat td.l { text-align: left; }
   <div class="top-inner">
     <div class="title-row">
       <h1>맥널티 쿠팡 로켓배송 · 판매·재고·발주</h1>
-      <span class="period" id="period"></span>
+      <div class="meta-r"><span class="period" id="period"></span><a class="rawdl" id="rawDl" download hidden></a></div>
     </div>
     <div class="filters" id="winRow">
       <span class="flabel">기간</span>
@@ -847,6 +852,13 @@ function renderSales(L) {
   renderSalesTable(L);
 }
 
+// 가장 최근에 올린 판매 원본 파일(sales/input) 내려받기
+(() => {
+  const f = (DATA.files.sales || []).slice().sort().pop(), a = document.getElementById('rawDl'); if (!f || !a) return;
+  const ts = (f.match(/(\d{14})\.csv$/) || [])[1];
+  a.href = 'input/' + encodeURIComponent(f); a.download = f; a.hidden = false; a.title = f;
+  a.innerHTML = `⬇ 판매 원본 CSV 받기<small>${ts ? `${+ts.slice(4, 6)}/${+ts.slice(6, 8)} ${ts.slice(8, 10)}:${ts.slice(10, 12)} 업로드` : f}</small>`;
+})();
 function initSalesFilters() {
   document.getElementById('sfGrpTag').onclick = () => { state.sf.grp = ''; markGrpCards(); renderSalesTable(list()); };
   DATA.skus.forEach(k => k.docPOs = k.pend ? k.docPO : null);   // 입고 예정 없는 SKU는 정렬에서 맨 뒤
