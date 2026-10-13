@@ -216,6 +216,10 @@ h2.sec .note { font-weight: 400; }
 .fc-bar { height: 8px; background: var(--grid); border-radius: 4px; overflow: hidden; }
 .fc-bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
 .fc-tbl td, .fc-tbl th { font-size: 13px; }
+.kcell.kclick { cursor: pointer; transition: background .12s; }
+.kcell.kclick:hover { background: var(--grid); }
+.kcell.kon { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); box-shadow: inset 0 -3px 0 var(--accent); }
+#sfGrpTag { margin-left: 10px; vertical-align: 2px; font-size: 12px; padding: 2px 10px; }
 .fc-bar { position: relative; overflow: visible !important; }
 .fc-bar b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink-2); }
 .fc-stack { display: flex; overflow: hidden !important; }
@@ -327,7 +331,7 @@ table.heat td.l { text-align: left; }
       <div class="chart"><canvas id="cDaily" aria-label="매출 막대그래프"></canvas></div>
     </div>
     <div class="panel">
-      <div class="toolbar"><h2>전체 SKU <span class="hcount" id="nSales"></span></h2></div>
+      <div class="toolbar"><h2>전체 SKU <span class="hcount" id="nSales"></span><button class="chip" id="sfGrpTag" aria-pressed="true" hidden title="전체로 보기"></button></h2></div>
       <div class="tfilters">
         <input type="search" id="sfQ" placeholder="SKU명·ID 검색" aria-label="SKU 검색">
         <select id="sfCat" aria-label="세부카테고리"></select>
@@ -737,7 +741,7 @@ function smallTable(id, cntId, head, rows, empty = '해당 SKU가 없습니다.'
 const etaTxt = k => k.pend ? `${n0(k.pend)}<span class="sub2">${md(k.firstEta)}${k.lateN ? ' · 지연' : ''}</span>` : '<span class="muted">–</span>';
 
 /* ================= 판매 현황 ================= */
-state.sf = { q: '', cat: '', st: '', po: '', sale: '' }; state.sSort = { key: 'G', dir: -1 };
+state.sf = { q: '', cat: '', st: '', po: '', sale: '', grp: '' }; state.sSort = { key: 'G', dir: -1 };
 const SCOLS2 = [
   { key: null, lab: '#', l: true }, { key: null, lab: 'SKU', l: true },
   { key: 'G', lab: '매출' }, { key: 'Q', lab: '판매수량' }, { key: 'avgQ', lab: '일평균<br>판매수량' },
@@ -770,6 +774,7 @@ function renderSales(L) {
   const sepPart = mkPart('별도 관리 원두 매출액(GMV)', '별도 관리 원두 PPM', k => SEP_BEANS.includes(k.id));
   const etcPart = mkPart('기타 매출액(GMV)', '기타 PPM', k => ETC_SUB.includes(k.sub));
   const ORDER = [parts[0], parts[1], parts[2], sepPart, etcPart];   // 총 · 커피/차 · 음료 · 별도 관리 원두 · 기타
+  ['', '커피/차', '음료', '별도 관리 원두', '기타'].forEach((g, i) => ORDER[i].key = g);   // 카드를 누르면 아래 SKU 표를 그 그룹만
   const arrow = (d, txt) => !isFinite(d) ? '' : `<b class="${d < 0 ? 'neg' : 'pos'}">${d < 0 ? '▼' : '▲'}${txt}</b>`;
   const wonFull = v => '₩' + nf.format(Math.round(v));
   // PMC = 쿠팡 추가 할인가 합계 (증감 화살표는 좋고 나쁨 없이 중립색)
@@ -778,11 +783,15 @@ function renderSales(L) {
   const pmcCell = `<div class="kcell"><span class="ktag">PMC</span><span class="kval">${wonFull(pmcC)}</span>
       <span class="ksub">${pmcP != null ? `${cmpLabel} ${wonFull(pmcP)} · <b class="neutral">${isFinite(d) ? (d < 0 ? '▼' : '▲') + (pmcP ? Math.abs(d / pmcP * 100).toFixed(1) + '%' : '') : ''}</b>` : ''}<span class="pmcr">매출 대비 ${totG ? (pmcC / totG * 100).toFixed(2) + '%' : '–'}</span></span></div>`;
   document.getElementById('kpiSales').innerHTML = `
-    <div class="kgroup five">${ORDER.map(p => `<div class="kcell"><span class="ktag">${p.lg}</span><span class="kval">${wonFull(p.cur.g)}</span>
+    <div class="kgroup five">${ORDER.map(p => `<div class="kcell kclick" data-grp="${p.key}" title="${p.key ? `아래 전체 SKU를 ${p.key}만 보기` : '아래 전체 SKU를 전체로'}"><span class="ktag">${p.lg}</span><span class="kval">${wonFull(p.cur.g)}</span>
       <span class="ksub">${p.prv ? `${cmpLabel} ${wonFull(p.prv.g)} · ${arrow(p.cur.g - p.prv.g, p.prv.g ? Math.abs((p.cur.g - p.prv.g) / p.prv.g * 100).toFixed(1) + '%' : '')}` : `일평균 ${wonFull(p.cur.g / W)}`}</span></div>`).join('')}</div>
-    <div class="kgroup five">${ORDER.map(p => `<div class="kcell"><span class="ktag">${p.lp}</span><span class="kval">${isFinite(p.ppmC) ? (p.ppmC * 100).toFixed(2) + '%' : '–'}</span>
+    <div class="kgroup five">${ORDER.map(p => `<div class="kcell kclick" data-grp="${p.key}" title="${p.key ? `아래 전체 SKU를 ${p.key}만 보기` : '아래 전체 SKU를 전체로'}"><span class="ktag">${p.lp}</span><span class="kval">${isFinite(p.ppmC) ? (p.ppmC * 100).toFixed(2) + '%' : '–'}</span>
       <span class="ksub">${p.prv && isFinite(p.ppmP) && isFinite(p.ppmC) ? `${cmpLabel} ${(p.ppmP * 100).toFixed(2)}% · ${arrow(p.ppmC - p.ppmP, Math.abs((p.ppmC - p.ppmP) * 100).toFixed(2) + '%p')}` : (!p.cur.g ? '판매 없음' : !p.prv ? '비교 자료 없음' : '비교 기간 판매 없음')}</span></div>`).join('')}</div>
     <div class="kgroup five pmcrow">${pmcCell}${poFcCard()}</div>`;
+  document.querySelectorAll('#kpiSales .kclick').forEach(c => c.onclick = () => {
+    const g = c.dataset.grp; state.sf.grp = g && g !== state.sf.grp ? g : ''; markGrpCards(); renderSalesTable(list());
+  });
+  markGrpCards();
   const fcc = document.getElementById('fcCard');
   if (fcc) fcc.onclick = () => { setTab('stock', true); requestAnimationFrame(() => document.getElementById('poFc').scrollIntoView({ behavior: 'smooth', block: 'start' })); };
 
@@ -839,6 +848,7 @@ function renderSales(L) {
 }
 
 function initSalesFilters() {
+  document.getElementById('sfGrpTag').onclick = () => { state.sf.grp = ''; markGrpCards(); renderSalesTable(list()); };
   DATA.skus.forEach(k => k.docPOs = k.pend ? k.docPO : null);   // 입고 예정 없는 SKU는 정렬에서 맨 뒤
   const cats = [...new Set(DATA.skus.map(k => k.cat))].sort((a, b) => a.localeCompare(b, 'ko'));
   document.getElementById('sfCat').innerHTML = '<option value="">세부카테고리 전체</option>' + cats.map(c => `<option>${esc(c)}</option>`).join('');
@@ -846,10 +856,13 @@ function initSalesFilters() {
     [['urgent', '긴급 (7일 미만)'], ['caution', '주의 (14일 미만)'], ['stable', '안정'], ['over', '과잉 (90일 이상)'], ['nosale', '판매없음'], ['na', '재고 정보없음']].map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
   const bind = (id, key, ev = 'change') => document.getElementById(id).addEventListener(ev, e => { state.sf[key] = e.target.value.trim(); renderSalesTable(list()); });
   bind('sfQ', 'q', 'input'); bind('sfCat', 'cat'); bind('sfSt', 'st'); bind('sfPo', 'po'); bind('sfSale', 'sale');
-  document.getElementById('sfReset').onclick = () => { state.sf = { q: '', cat: '', st: '', po: '', sale: '' };
+  document.getElementById('sfReset').onclick = () => { state.sf = { q: '', cat: '', st: '', po: '', sale: '', grp: '' }; markGrpCards();
     ['sfQ', 'sfCat', 'sfSt', 'sfPo', 'sfSale'].forEach(id => document.getElementById(id).value = ''); renderSalesTable(list()); };
 }
 const STOCK_KEYS = ['stock', 'doc', 'pend', 'docPOs'];
+function markGrpCards() {
+  document.querySelectorAll('#kpiSales .kclick').forEach(c => c.classList.toggle('kon', !!state.sf.grp && c.dataset.grp === state.sf.grp));
+}
 function renderSalesTable(L) {
   const f = state.sf, q = f.q.toLowerCase();
   // 재고 관련 열·필터는 '당일'에서만 (재고는 기준일 하루 값이라 기간 합계와 섞이면 의미가 없음)
@@ -858,10 +871,11 @@ function renderSalesTable(L) {
   const fst = showStock ? f.st : '', fpo = showStock ? f.po : '';
   const COLS = (showStock ? SCOLS2 : SCOLS2.filter(c => !STOCK_KEYS.includes(c.key))).map(c => c.key === 'avgQ' && state.W === 1 ? { ...c, sub: '최근 30일' } : c);
   if (!showStock && STOCK_KEYS.includes(state.sSort.key)) state.sSort = { key: 'G', dir: -1 };
-  const rows = L.filter(k => (!q || k.name.toLowerCase().includes(q) || String(k.id).includes(q)) && (!f.cat || k.cat === f.cat) &&
+  const rows = L.filter(k => (!f.grp || groupOf(k) === f.grp) && (!q || k.name.toLowerCase().includes(q) || String(k.id).includes(q)) && (!f.cat || k.cat === f.cat) &&
     (!fst || k.bucket.key === fst) && (!fpo || (fpo === 'y') === (k.pend > 0)) && (!f.sale || (f.sale === 'y') === (k.G > 0))).sort(sorter(state.sSort));
   if (showStock) renderStLegend('stLegSales', L, f.st, v => { state.sf.st = v; document.getElementById('sfSt').value = v; renderSalesTable(list()); });
   document.getElementById('nSales').textContent = `${rows.length}개${rows.length !== L.length ? ` / 전체 ${L.length}개` : ''}`;
+  const gt = document.getElementById('sfGrpTag'); gt.hidden = !f.grp; gt.textContent = f.grp ? `${f.grp}만 보기 ✕` : '';
   const t = document.getElementById('tTop');
   t.innerHTML = headRow(COLS, state.sSort, 'data-i') + '<tbody>' + (rows.length ? rows.map((k, i) => `<tr class="click" data-id="${k.id}">
       <td class="l muted">${i + 1}</td>${skuCell(k)}
