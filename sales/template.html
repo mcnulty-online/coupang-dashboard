@@ -1004,7 +1004,7 @@ function renderSalesTable(L) {
 
 /* ---- 당월 마감 예상 매입금액 (입고예정일 기준 월, 발주금액 기준 · 발주된 건 모두 입고된다고 가정) ----
    계산은 build_data.py에서 (DATA.poFc):
-   예상 = 이미 발주된 이번 달 입고분(총발주 매입금) + 추가 발주 예상(리드타임 7일 안에 발주될 날 수 × 판매원가×1.1 일평균 × 발주/판매 비율) */
+   예상 = 이미 발주된 이번 달 입고분(발주금액 VAT 제외) + 추가 발주 예상(리드타임 7일 안에 발주될 날 수 × 판매원가 일평균 × 발주/판매 비율) */
 const eok1 = v => (v / 1e8).toFixed(1) + '억';
 const wonF = v => '₩' + nf.format(Math.round(v));
 function poForecast() {
@@ -1015,7 +1015,7 @@ function poForecast() {
 function poFcCard() {
   const F = poForecast(); if (!F) return '';
   const { T } = F, ord = T.R + T.S;
-  return `<div class="kcell fccard" id="fcCard" title="재고·발주 탭에서 자세히 보기"><span class="ktag">${F.M}월 마감 예상 매입금액 · 입고 기준</span>
+  return `<div class="kcell fccard" id="fcCard" title="재고·발주 탭에서 자세히 보기"><span class="ktag">${F.M}월 마감 예상 매입금액 · 입고 기준 · VAT 제외</span>
       <span class="kval">약 ${won(T.est)}</span>
       <span class="ksub">${F.band != null ? `보통 ±${eok1(F.band)} 안팎 · ` : ''}이미 발주 ${won(ord)} + 추가 발주 예상 ${won(T.new)}<span class="pmcr">${F.M}월 입고분 발주금액 ${wonF(ord)} (${F.dl ? F.dl.slice(5).replace('-', '/') : md(F.cut)} 자료) · 예상의 ${pct(ord / T.est, 0)} <span class="fclink">자세히 ›</span></span></span></div>`;
 }
@@ -1028,19 +1028,19 @@ function renderPoForecast() {
   const st = F.stat, nd = +F.newdays, left = F.todayLeft || 0;
   el.innerHTML = `
     <div class="fc-head">
-      <div><span class="ktag">${M}월 마감 예상 매입금액 · 입고예정일 기준</span>
+      <div><span class="ktag">${M}월 마감 예상 매입금액 · 입고예정일 기준 · VAT 제외</span>
         <div class="fc-val">약 ${wonF(T.est)}</div>
         ${st ? `<div class="ksub">보통 <b>±${eok1(F.band)}</b> 안팎 — 지난 ${st.n}개월을 매월 ${cday}일 기준으로 같은 방식으로 예측했을 때 평균 오차 ${(st.mae * 100).toFixed(1)}%.
           월말로 갈수록 정확해집니다: ${F.byDay.map(x => `${x.day}일 ${(x.mae * 100).toFixed(1)}%`).join(' · ')}</div>` : ''}
         <div class="ksub"><i class="fcdot" style="--c:var(--accent)"></i>입고예정일 지난 발주 <b>${wonF(T.R)}</b> — ${md(F.mS)}~${md(F.cut)} 입고 예정이던 발주금액</div>
         <div class="ksub"><i class="fcdot" style="--c:var(--s1)"></i>남은 입고 예정 <b>${wonF(T.S)}</b> — 이미 발주돼 ${M}월 안에 입고될 발주금액${F.sched.length ? ` · ${F.sched.map(([d, v]) => `${md(d)} ${won(v)}`).join(' · ')}` : ''}</div>
-        <div class="ksub"><i class="fcdot" style="--c:var(--s1-soft)"></i>추가 발주 예상 <b>${wonF(T.new)}</b> — 아직 발주 전이지만 ${md(lastOrder)}까지 발주되면 리드타임 ${F.lead}일로 ${M}월 안에 입고: ${left > 0.005 ? `오늘 남은 발주 약 ${pct(left, 0)}(${F.dl.slice(11)} 자료 이후) + ` : ''}${Math.round(nd - left)}일 = ${nd.toFixed(1)}일 × 일평균 판매원가×1.1 ${won(T.daily)}원 × 발주/판매 비율 ${F.rin.toFixed(2)}</div></div>
+        <div class="ksub"><i class="fcdot" style="--c:var(--s1-soft)"></i>추가 발주 예상 <b>${wonF(T.new)}</b> — 아직 발주 전이지만 ${md(lastOrder)}까지 발주되면 리드타임 ${F.lead}일로 ${M}월 안에 입고: ${left > 0.005 ? `오늘 남은 발주 약 ${pct(left, 0)}(${F.dl.slice(11)} 자료 이후) + ` : ''}${Math.round(nd - left)}일 = ${nd.toFixed(1)}일 × 일평균 판매원가 ${won(T.daily)}원 × 발주/판매 비율 ${F.rin.toFixed(2)}</div></div>
       <div class="fc-prog"><div class="ksub">${M}월 입고분 이미 발주된 금액</div>
         <div class="fc-po">${wonF(ord)} <small>· 예상의 ${pct(ord / T.est, 0)}</small></div>
         <div class="fc-bar fc-stack"><i style="width:${w(T.R)}%;background:var(--accent)"></i><i style="width:${w(T.S)}%;background:var(--s1)"></i><i style="width:${w(T.new)}%;background:var(--s1-soft)"></i></div>
         <div class="ksub fc-axis"><span>0</span><span>지난 · 남은 입고 예정 · 추가 발주</span><span>${won(T.est)}</span></div></div>
     </div>
-    <div class="tbl-wrap"><table class="fc-tbl"><thead><tr><th class="l">구분</th><th>마감 예상</th><th>입고예정일 지난 발주</th><th>남은 입고 예정</th><th>추가 발주 예상</th><th>일평균 판매원가×1.1</th></tr></thead><tbody>
+    <div class="tbl-wrap"><table class="fc-tbl"><thead><tr><th class="l">구분</th><th>마감 예상</th><th>입고예정일 지난 발주</th><th>남은 입고 예정</th><th>추가 발주 예상</th><th>일평균 판매원가</th></tr></thead><tbody>
       ${F.groups.filter(r => r.g !== '전체' && (r.est > 0 || r.S)).map(r => `<tr><td class="l">${r.g}</td><td><b>${won(r.est)}</b></td><td>${won(r.R)}</td><td>${won(r.S)}</td><td>${won(r.new)}</td><td>${won(r.daily)}</td></tr>`).join('')}
       <tr class="tot"><td class="l">합계</td><td>${won(T.est)}</td><td>${won(T.R)}</td><td>${won(T.S)}</td><td>${won(T.new)}</td><td>${won(T.daily)}</td></tr>
     </tbody></table></div>
@@ -1048,7 +1048,7 @@ function renderPoForecast() {
       <div class="tbl-wrap"><table class="fc-tbl"><thead><tr><th class="l">월</th><th>실제 (그달 입고분 발주금액)</th><th>${cday}일 기준 예측</th><th>오차</th><th>그때까지 발주된 분</th><th>추가 발주 예상</th></tr></thead><tbody>
       ${[...F.back].reverse().map(b => `<tr><td class="l">${b.m.slice(2, 4)}년 ${+b.m.slice(5)}월</td><td><b>${won(b.act)}</b></td><td>${won(b.est)}</td>${err(b.e)}<td>${won(b.R + b.S)}</td><td>${won(b.new)}</td></tr>`).join('')}
       </tbody></table></div></details>` : ''}
-    <p class="desc" style="margin:0">매입금액 = 발주금액(총발주 매입금, VAT 포함)이고, 입고예정일이 속한 달로 묶습니다. 발주된 건은 모두 입고된다고 보고 입고 처리 여부는 따지지 않습니다. 아직 발주 안 된 분은 최근 14일 판매원가×1.1에 직전 6개월 발주/판매 비율을 곱해 추정하고, 자료를 받은 시각 이후 오늘 더 나올 발주도 시간대별 발주 비중으로 넣습니다. 쿠팡 발주→입고는 대부분 ${F.lead}일이라 월말 1주일 전쯤이면 그 달 입고분이 거의 다 발주돼 있어 예측이 아주 정확해집니다. 오차 ±15% 넘는 달은 빨간색, 상단 카테고리·브랜드 필터와 관계없이 전체 기준입니다.</p>`;
+    <p class="desc" style="margin:0">매입금액 = 발주금액의 VAT 제외 금액(확정수량 × 공급가)이고, 입고예정일이 속한 달로 묶습니다. 발주된 건은 모두 입고된다고 보고 입고 처리 여부는 따지지 않습니다. 아직 발주 안 된 분은 최근 14일 판매원가에 직전 6개월 발주/판매 비율을 곱해 추정하고, 자료를 받은 시각 이후 오늘 더 나올 발주도 시간대별 발주 비중으로 넣습니다. 쿠팡 발주→입고는 대부분 ${F.lead}일이라 월말 1주일 전쯤이면 그 달 입고분이 거의 다 발주돼 있어 예측이 아주 정확해집니다. 오차 ±15% 넘는 달은 빨간색, 상단 카테고리·브랜드 필터와 관계없이 전체 기준입니다.</p>`;
 }
 
 /* ================= 재고·발주 ================= */

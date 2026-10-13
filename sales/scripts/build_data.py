@@ -68,11 +68,14 @@ for f in sorted(glob.glob(os.path.join(IN, 'PO_SKU_LIST*.csv'))):
     pm_parts.append(pd.read_csv(f, encoding='utf-8-sig').assign(_ts=ts))
 pa = None
 if pm_parts:
-    pa = pd.concat([x[['_ts', '발주번호', '발주현황', 'SKU ID', '발주일', '입고예정일', '총발주 매입금', '입고금액']] for x in pm_parts], ignore_index=True)
+    pa = pd.concat([x[[c for c in ['_ts', '발주번호', '발주현황', 'SKU ID', '발주일', '입고예정일', '매입가', '공급가', '총발주 매입금', '입고금액'] if c in x.columns]] for x in pm_parts], ignore_index=True)
     pa = pa.sort_values('_ts', kind='stable').drop_duplicates(['발주번호', 'SKU ID'], keep='last')
     pa['od'] = pd.to_datetime(pa['발주일'].astype(str).str[:10])
     pa['ed'] = pd.to_datetime(pa['입고예정일'].astype(str).str[:10])
     pa['em'] = pa['ed'].dt.to_period('M')
+    # 매입금액은 VAT 제외: 총발주 매입금 × 공급가/매입가 (공급가 없으면 ÷1.1)
+    vr = (pa['공급가'] / pa['매입가']).where(pa['매입가'] > 0) if '공급가' in pa else pd.Series(float('nan'), index=pa.index)
+    pa['amt'] = pa['총발주 매입금'] * vr.fillna(1 / 1.1)
     po_cut = pd.Timestamp(pa['_ts'].max()[:8])          # 발주 자료 기준일 = 가장 최근 발주 파일을 내려받은 날
     print(f'발주 이력: {len(pa):,}건 · 발주일 {pa["od"].min().date()} ~ {pa["od"].max().date()} · 자료 기준일 {po_cut.date()}')
 
@@ -214,11 +217,10 @@ if HIST:
     tot = sum(sum(k['g']) for k in hsku.values())
     print(f'이력: {months[0]} ~ {months[-1]} ({M}개월) · SKU {len(hsku)} · GMV {tot:,} = {int(allS["매출액(GMV)"].sum()):,} · 일별 {len(hdays)}일 × {len(daily)}그룹')
 
-# ---- 당월 마감 예상 매입금액 (입고예정일 기준 월, 입고금액) ----
-#  예상 = 입고 완료(입고예정일 ≤ 기준일, 입고금액)
-#       + 입고 예정(이미 발주됐고 이번 달 안에 입고 예정, 총발주 매입금 × 입고 반영률)
-#       + 추가 발주분(아직 발주 전이지만 리드타임 7일 안에 들어와 이번 달 입고될 날 수 × 최근 14일 판매원가×1.1 일평균 × 입고/판매 비율)
-#  반영률·비율은 직전 6개월 실적. 지난 달들을 같은 날짜 기준으로 다시 예측해 오차도 같이 저장.
+# ---- 당월 마감 예상 매입금액 (VAT 제외, 입고예정일 기준 월, 발주금액 기준 · 발주된 건은 모두 입고된다고 가정) ----
+#  예상 = 이미 발주된 이번 달 입고분(발주금액, 공급가 기준)
+#       + 추가 발주 예상(아직 발주 전이지만 리드타임 7일 안에 발주돼 이번 달 입고될 날 수 × 최근 14일 판매원가 일평균 × 발주/판매 비율)
+#  비율은 직전 6개월 실적. 지난 달들을 같은 날짜 기준으로 다시 예측해 오차도 같이 저장.
 SEP_BEANS = {80661387, 80686777, 80855135, 80855134, 80855137}
 ETC_SUB = {'Kitchen Appliance', 'Tools & Gadgets'}
 FC_GROUPS = ['커피/차', '음료', '별도 관리 원두', '기타', '그 외']
@@ -235,13 +237,13 @@ if pa is not None:
         return {'커피': '커피/차', '음료': '음료'}.get(k['grp'], '그 외')
     pa['g'] = pa['SKU ID'].map(group_of)
     s['fg'] = s['SKU ID'].map(group_of)
-    cg = (s.groupby([pd.to_datetime(s['d']), 'fg'])['매입원가(COGS)'].sum().unstack(fill_value=0) * 1.1).reindex(columns=FC_GROUPS, fill_value=0)
+    cg = (s.groupby([pd.to_datetime(s['d']), 'fg'])['매입원가(COGS)'].sum().unstack(fill_value=0)).reindex(columns=FC_GROUPS, fill_value=0)
     cg = cg.reindex(pd.date_range(cg.index.min(), end), fill_value=0)
     cg['전체'] = cg[FC_GROUPS].sum(axis=1)
     send0 = pd.Timestamp(end); lag = (po_cut - send0).days          # 판매 자료가 발주 자료보다 며칠 늦은지
     first_m = pa['od'].min().to_period('M') + 2                      # 이 달부터 입고 실적이 온전함
     by_em = {m: g for m, g in pa.groupby('em')}
-    def actual(m): return float(by_em[m]['총발주 매입금'].sum()) if m in by_em else 0.0   # 입고예정일 월 기준 발주금액 (발주된 건 모두 입고 가정)
+    def actual(m): return float(by_em[m]['amt'].sum()) if m in by_em else 0.0   # 입고예정일 월 기준 발주금액 (발주된 건 모두 입고 가정)
     def mcost(m): return float(cg['전체'][m.start_time:m.end_time.normalize()].sum())
     # 발주 자료를 내려받은 시각 이후에 그날 더 나올 발주 비중 (쿠팡 발주는 8~17시에 걸쳐 나옴, 최근 6개월 금액 기준)
     dl_ts = pa['_ts'].max(); dl_sec = int(dl_ts[8:10]) * 3600 + int(dl_ts[10:12]) * 60
@@ -256,13 +258,13 @@ if pa is not None:
         done, sched = x[x['ed'] <= cut], x[x['ed'] > cut]
         prev = [p for p in pd.period_range(m - 6, m - 1, freq='M') if p >= first_m]
         if not prev: return None
-        rin = sum(actual(p) for p in prev) / sum(mcost(p) for p in prev)   # 입고월 기준 발주금액 ÷ 판매원가×1.1
+        rin = sum(actual(p) for p in prev) / sum(mcost(p) for p in prev)   # 입고월 기준 발주금액 ÷ 판매원가 (둘 다 VAT 제외)
         newdays = max(0, (me - cut).days - LEAD) + (left if (me - cut).days > LEAD else 0)   # left: 기준일 중 아직 안 나온 발주분
         daily = cg.loc[send - pd.Timedelta(days=13):send].mean() if send >= cg.index[0] else cg.iloc[:0].sum()
         rows = []
         for g in FC_GROUPS + ['전체']:
             sel = (lambda d: d) if g == '전체' else (lambda d, g=g: d[d['g'] == g])
-            R = float(sel(done)['총발주 매입금'].sum()); S = float(sel(sched)['총발주 매입금'].sum())
+            R = float(sel(done)['amt'].sum()); S = float(sel(sched)['amt'].sum())
             new = newdays * float(daily.get(g, 0)) * rin
             rows.append(dict(g=g, R=R, S=S, new=new, est=R + S + new, daily=float(daily.get(g, 0))))
         return dict(cut=cut, send=send, rin=rin, newdays=newdays, rows=rows, sched=sched, est=rows[-1]['est'])
@@ -279,7 +281,7 @@ if pa is not None:
         return dict(n=len(e), mae=round(float(sum(map(abs, e)) / len(e)), 4), bias=round(float(sum(e) / len(e)), 4), mx=round(float(max(map(abs, e))), 4), in10=int(sum(abs(x) <= .10 for x in e)), in15=int(sum(abs(x) <= .15 for x in e)))
     cday = po_cut.day
     F = at(cur_m, cday, today_left); B = backtest(cday)
-    sched_by_day = F['sched'].groupby(F['sched']['ed'].dt.strftime('%Y-%m-%d'))['총발주 매입금'].sum()
+    sched_by_day = F['sched'].groupby(F['sched']['ed'].dt.strftime('%Y-%m-%d'))['amt'].sum()
     r = lambda v: int(round(v))
     po_fc = dict(month=str(cur_m), cut=po_cut.strftime('%Y-%m-%d'), salesEnd=F['send'].strftime('%Y-%m-%d'), lead=LEAD,
                  rin=round(float(F['rin']), 4), newdays=round(float(F['newdays']), 2), todayLeft=round(today_left, 3),
