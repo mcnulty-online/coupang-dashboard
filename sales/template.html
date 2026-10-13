@@ -244,6 +244,9 @@ h2.sec .note { font-weight: 400; }
 .calg .cd.off { color: var(--line); cursor: default; }
 .calg .cd.in { background: var(--accent-soft, #e3efe9); border-radius: 0; }
 .calg .cd.st, .calg .cd.en { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.calft { display: flex; align-items: center; gap: 8px; justify-content: flex-end; border-top: 1px solid var(--grid); padding-top: 10px; }
+.calft .calsum { flex: 1; font-size: 12px; color: var(--muted); }
+.calft .chip { padding: 5px 16px; }
 .calg .cd.asof:not(.st):not(.en) { box-shadow: inset 0 0 0 1px var(--accent); }
 .kcell.kclick { cursor: pointer; transition: background .12s; }
 .kcell.kclick:hover { background: var(--grid); }
@@ -683,16 +686,22 @@ function drawCal() {
     <div class="calhd"><span class="calrng"><b>${fmt(cal.a)}</b> → <b>${cal.b ? fmt(cal.b) : '<i>종료일 선택</i>'}</b></span>
       <div class="calpre">${presets.map(([l, a, b]) => `<button type="button" class="chip" data-a="${a}" data-b="${b}">${l}</button>`).join('')}</div></div>
     <div class="calnav"><button type="button" data-n="-12" title="1년 전">«</button><button type="button" data-n="-1" title="이전 달">‹</button>
-      <span class="calhint">${cal.a && !cal.b ? '종료일을 누르세요' : '시작일을 누르세요 · 월 이름을 누르면 그 달 전체'}</span>
+      <span class="calhint">${cal.a && !cal.b ? '종료일을 누르세요 (같은 날을 다시 누르면 하루)' : '날짜 두 번(시작·종료) 또는 월 이름을 누른 뒤 확인'}</span>
       <button type="button" data-n="1" title="다음 달">›</button><button type="button" data-n="12" title="1년 뒤">»</button></div>
-    <div class="calms">${month(cal.view)}${ymAdd(cal.view, 1) <= MAX_YM ? month(ymAdd(cal.view, 1)) : ''}</div>`;
+    <div class="calms">${month(cal.view)}${ymAdd(cal.view, 1) <= MAX_YM ? month(ymAdd(cal.view, 1)) : ''}</div>
+    <div class="calft"><span class="calsum">${cal.a ? (() => { const b = cal.b || cal.a, n = DAYS.indexOf(b) - DAYS.indexOf(cal.a) + 1; return `${n}일 선택`; })() : ''}</span>
+      <button type="button" class="chip calno">취소</button><button type="button" class="chip calok" aria-pressed="true"${cal.a ? '' : ' disabled'}>확인</button></div>`;
   calPop.querySelectorAll('.calnav [data-n]').forEach(b => b.onclick = e => { e.stopPropagation(); cal.view = ymAdd(cal.view, +b.dataset.n); drawCal(); });
-  calPop.querySelectorAll('.calpre [data-a]').forEach(b => b.onclick = () => { closeCal(); setRange(b.dataset.a, b.dataset.b); });
-  calPop.querySelectorAll('.calmt').forEach(b => b.onclick = () => { const m = b.dataset.m; closeCal(); setRange(`${m}-01`, `${m}-${String(daysInMonth(m)).padStart(2, '0')}`); });
+  const draft = (a, b) => { cal.a = a < DAYS[0] ? DAYS[0] : a; cal.b = b > ASOF ? ASOF : b; cal.hover = null; cal.view = ymAdd(cal.b.slice(0, 7), -1); drawCal(); };
+  calPop.querySelectorAll('.calpre [data-a]').forEach(b => b.onclick = e => { e.stopPropagation(); draft(b.dataset.a, b.dataset.b); });
+  calPop.querySelectorAll('.calmt').forEach(b => b.onclick = e => { e.stopPropagation(); const m = b.dataset.m, v = cal.view;
+    draft(`${m}-01`, `${m}-${String(daysInMonth(m)).padStart(2, '0')}`); cal.view = v; drawCal(); });
+  calPop.querySelector('.calok').onclick = e => { e.stopPropagation(); if (!cal.a) return; const a = cal.a, b = cal.b || cal.a; closeCal(); setRange(a, b); };
+  calPop.querySelector('.calno').onclick = e => { e.stopPropagation(); closeCal(); };
   calPop.querySelectorAll('.cd:not(.off)').forEach(b => {
     b.onclick = e => { e.stopPropagation(); const d = b.dataset.d;
       if (!cal.a || cal.b) { cal.a = d; cal.b = null; cal.hover = null; drawCal(); }
-      else { const a = cal.a; closeCal(); setRange(a, d); } };
+      else { if (d < cal.a) { cal.b = cal.a; cal.a = d; } else cal.b = d; cal.hover = null; drawCal(); } };
     b.onmouseenter = () => { if (cal.a && !cal.b && cal.hover !== b.dataset.d) { cal.hover = b.dataset.d; drawCal(); } };
   });
 }
