@@ -220,6 +220,22 @@ h2.sec .note { font-weight: 400; }
 .fc-bar { height: 8px; background: var(--grid); border-radius: 4px; overflow: hidden; }
 .fc-bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
 .fc-tbl td, .fc-tbl th { font-size: 13px; }
+.dp-mini { display: none; }
+@media (max-width: 700px) {
+  .dp-head h3 { font-size: 14px; } .dp-head h3 .note { display: block; font-weight: 500; }
+  .dp-head .seg { display: flex; width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .dp-head .seg::-webkit-scrollbar { display: none; }
+  .dp-head .seg button { flex: 1 0 auto; white-space: nowrap; padding: 7px 10px; }
+  .dpanel .dp-sum { display: none; }
+  .dp-mini { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .dp-mini > div { background: var(--grid); border-radius: 8px; padding: 7px 8px; display: grid; gap: 1px; min-width: 0; }
+  .dp-mini span { font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dp-mini b { font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .dp-mini small { font-size: 10.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dp-mini em { font-style: normal; font-weight: 700; } .dp-mini em.down { color: var(--crit-ink); } .dp-mini em.up { color: var(--good-ink); }
+  .hoverbox { font-size: 12px; padding: 6px 10px; gap: 2px 10px; }
+  .hoverbox small, .hoverbox .tag { display: none; }
+}
 /* ---- 모바일: 한눈에 보기 ---- */
 .mk { display: none; }
 .tfold > summary { display: none; }
@@ -1263,6 +1279,14 @@ function renderPanel(k) {
       · 최근 7일 평균 <b>${r7.toFixed(1)}</b> ${isFinite(chg) ? `(직전 7일 대비 <b class="${chg < 0 ? 'down' : 'up'}">${chg > 0 ? '+' : ''}${(chg * 100).toFixed(0)}%</b>)` : ''}
       · PPM <b>${pct(ppmP)}</b> · 전환율 <b>${pct(Vp ? Op / Vp : NaN)}</b> · 반품률 <b>${pct(Qp ? Rp / Qp : NaN)}</b> · 품절 <b>${SOp}일</b> · 발주상태 <b>${esc(k.status)}</b>
       ${k.pend ? `<br>입고 대기 <b>${n0(k.pend)}개</b> (${won(k.pendAmt)}원) · 첫 입고 <b>${md(k.firstEta)}</b>${k.lateN ? ` · <b class="down">지연 ${k.lateN}건</b>` : ''} · 예상 소진 <b>${k.runout ? md(k.runout) : docTxt(k.doc)}</b> → 발주 반영 <b>${k.runoutPO ? md(k.runoutPO) : docTxt(k.docPO)}</b>${k.gap > 0 && isFinite(k.gap) ? ` · <b class="down">입고 전 ${k.gap}일 공백</b>` : ''}` : ''}</p>
+    <div class="dp-mini">
+      <div><span>판매 · 15일</span><b>${n0(Qp)}개</b><small>일평균 ${n0(avg)}</small></div>
+      <div><span>매출 · 15일</span><b>${won(Gp)}</b><small>PPM ${pct(ppmP)}</small></div>
+      <div><span>최근 7일 평균</span><b>${n0(r7)}개</b><small>${isFinite(chg) ? `전주 대비 <em class="${chg < 0 ? 'down' : 'up'}">${chg > 0 ? '+' : ''}${(chg * 100).toFixed(0)}%</em>` : '&nbsp;'}</small></div>
+      ${k.inOps ? `<div><span>재고</span><b>${n0(k.stock)}개</b><small>재고일수 ${docTxt(k.doc)}</small></div>` : ''}
+      ${k.pend ? `<div><span>입고 대기</span><b>${n0(k.pend)}개</b><small>첫 ${md(k.firstEta)}${k.lateN ? ` · <em class="down">지연 ${k.lateN}건</em>` : ''}</small></div>
+      <div><span>예상 소진</span><b>${k.runout ? md(k.runout) : docTxt(k.doc)}</b><small>입고 반영 ${k.runoutPO ? md(k.runoutPO) : docTxt(k.docPO)}${k.gap > 0 && isFinite(k.gap) ? ` · <em class="down">공백 ${k.gap}일</em>` : ''}</small></div>` : ''}
+    </div>
     <div class="hoverbox" id="hb"></div>
     <div class="chart"><canvas id="cOpen"></canvas></div>
     <div class="legend" id="openLegend"></div>
@@ -1320,7 +1344,7 @@ function renderPanel(k) {
   });
   const lgd = items => document.getElementById('openLegend').innerHTML = items.map(([t, col, kind]) =>
     `<span>${kind === 'line' ? `<i class="ln ${col[1] || ''}" style="--c:${col[0]}"></i>` : `<i class="sw" style="--c:var(${col})"></i>`}${t}</span>`).join('') +
-    (k.soDays && state.mode !== 'stock' ? `<span><i class="sw round" style="--c:var(--crit)"></i>품절일</span>` : '') + '<span class="muted">· 막대에 마우스를 올리면 위 줄에 그날 값</span>';
+    (k.soDays && state.mode !== 'stock' ? `<span><i class="sw round" style="--c:var(--crit)"></i>품절일</span>` : '') + '<span class="muted">· 막대에 마우스를 올리면(모바일은 탭) 위 줄에 그날 값</span>';
 
   if (state.mode === 'yoy') {
     const hk = HMAP.get(k.id), Q = hk.q, Gm = hk.g, Cm = hk.c;
