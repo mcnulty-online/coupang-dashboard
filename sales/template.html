@@ -204,7 +204,6 @@ h2.sec { margin: 12px 0 -4px; font-size: 17px; font-weight: 700; display: flex; 
 h2.sec .note { font-weight: 400; }
 .kpis.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .pos { color: var(--good-ink); }
-#srcNote { overflow-wrap: anywhere; }
 .dtable th.l, .dtable td.l { text-align: left; }
 .dpanel > * { min-width: 0; max-width: 100%; }
 .dpanel { overflow: hidden; }
@@ -470,7 +469,6 @@ table.heat td.l { text-align: left; }
     </div>
 
   </section>
-  <p class="note" style="margin-top:24px" id="srcNote"></p>
 </main>
 <div class="drawer" id="drawer" hidden>
   <div class="drawer-back"></div>
@@ -724,8 +722,7 @@ function setTab(tab, push) {
 }
 document.getElementById('stockSearch').oninput = e => { state.aq = e.target.value.trim(); renderStockAll(stockList()); };
 
-document.getElementById('srcNote').textContent =
-  `데이터: 판매 ${DATA.files.sales.join(', ')} · 재고 ${DATA.files.ops.join(', ')} · 발주 ${DATA.files.po.join(', ') || '없음'} · 생성 ${DATA.generated}. 재고는 같은 날 센터별 행을 합산했고, 같은 날짜가 여러 파일에 있으면 최신 파일 기준입니다.`;
+// 데이터 파일 목록·생성 시각은 화면에 표시하지 않음 (DATA.files, DATA.generated에 그대로 있음)
 
 /* ---------- 차트 공통 ---------- */
 const charts = {};
