@@ -220,6 +220,62 @@ h2.sec .note { font-weight: 400; }
 .fc-bar { height: 8px; background: var(--grid); border-radius: 4px; overflow: hidden; }
 .fc-bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
 .fc-tbl td, .fc-tbl th { font-size: 13px; }
+/* ---- 모바일: 한눈에 보기 ---- */
+.mk { display: none; }
+.tfold > summary { display: none; }
+.tfold { display: grid; gap: 10px; }
+.tfold[open] { display: grid; }
+@media (max-width: 700px) {
+  header.top { position: static; }
+  .top-inner { gap: 8px; padding-block: 12px 0; }
+  h1 { font-size: 17px; }
+  .period { font-size: 12px; }
+  .filters { flex-wrap: nowrap; gap: 8px; }
+  .filters > .flabel { display: none; }
+  .filters { min-width: 0; max-width: 100%; }
+  .filters .chips { flex: 0 1 auto; min-width: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+  .filters .chips::-webkit-scrollbar { display: none; }
+  .filters .chip { white-space: nowrap; font-size: 12px; padding: 4px 10px; flex: none; }
+  #brandSel { flex: none; max-width: 120px; font-size: 12px; padding: 4px 8px; }
+  .tab { font-size: 14px; padding: 8px 10px 9px; }
+  .wrap { padding-inline: 12px; }
+  .panel { padding: 12px; }
+  .kpair > .kgroup { display: none; }
+  .mk { display: grid; gap: 8px; }
+  .mkt { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; overflow: hidden; border-collapse: separate; border-spacing: 0; }
+  .mkt th, .mkt td { padding: 8px 10px; white-space: nowrap; }
+  .mkt thead th { font-size: 11px; position: static; }
+  .mkt thead small { display: block; font-weight: 500; letter-spacing: 0; }
+  .mkt tbody th { font-size: 13px; font-weight: 600; color: var(--ink); letter-spacing: 0; background: none; position: static; }
+  .mkt td b { display: block; font-size: 15px; color: var(--ink); }
+  .mkt td small { display: block; font-size: 11px; color: var(--muted); }
+  .mkt td small b { display: inline; font-size: 11px; }
+  .mkt tbody tr:first-child th, .mkt tbody tr:first-child td b { font-weight: 800; }
+  .mkt tr.kclick { cursor: pointer; }
+  .mkt tr.kon th, .mkt tr.kon td { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+  .mkt tr:last-child th, .mkt tr:last-child td { border-bottom: 0; }
+  .mkrow { display: grid; grid-template-columns: 1fr 1.25fr; gap: 8px; }
+  .mkrow > div { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 10px 12px; display: grid; gap: 3px; align-content: start; }
+  .mkrow .ktag { justify-self: start; font-size: 11px; }
+  .mkrow .ktag i { font-style: normal; color: var(--muted); font-weight: 500; }
+  .mkrow b { font-size: 17px; color: var(--ink); }
+  .mkrow small { font-size: 11px; color: var(--muted); }
+  .mkfc { cursor: pointer; }
+  .chart { height: 200px; }
+  .calpop { max-height: none; padding: 12px; }
+  .calhint { font-size: 11px; }
+  .tfold > summary { display: list-item; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+  .tfold:not([open]) { display: block; }
+  .tfilters { gap: 6px; }
+  .tfilters input[type="search"] { flex: 1 1 100%; }
+  .tfilters select { flex: 1 1 45%; min-width: 0; font-size: 12px; }
+  table { font-size: 12px; }
+  th, td { padding: 6px 5px; }
+  td.name { min-width: 140px; max-width: 170px; font-size: 12px; }
+  #tTop th:first-child, #tTop td:first-child { display: none; }
+  #tTop td.name, #tTop th:nth-child(2) { position: sticky; left: 0; background: var(--surface); z-index: 1; box-shadow: 1px 0 0 var(--grid); }
+  #tTop th:nth-child(2) { z-index: 2; }
+}
 #winRow { position: relative; }
 .calbtn { display: inline-flex; align-items: center; gap: 6px; }
 .calbtn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; }
@@ -363,6 +419,7 @@ table.heat td.l { text-align: left; }
     </div>
     <div class="panel">
       <div class="toolbar"><h2>전체 SKU <span class="hcount" id="nSales"></span><button class="chip" id="sfGrpTag" aria-pressed="true" hidden title="전체로 보기"></button></h2></div>
+      <details class="tfold" open><summary>필터·상태</summary>
       <div class="tfilters">
         <input type="search" id="sfQ" placeholder="SKU명·ID 검색" aria-label="SKU 검색">
         <select id="sfCat" aria-label="세부카테고리"></select>
@@ -377,6 +434,7 @@ table.heat td.l { text-align: left; }
       </div>
       <p class="desc">열 제목을 누르면 정렬, 행을 누르면 SKU 상세가 열립니다. 10개가 넘으면 표 안에서 스크롤됩니다.</p>
       <div class="stlegend" id="stLegSales"></div>
+      </details>
       <div class="tbl-wrap scroll10"><table id="tTop"></table></div>
     </div>
   </section>
@@ -646,12 +704,12 @@ const calBtn = document.createElement('button'); calBtn.className = 'chip calbtn
 const calPop = document.createElement('div'); calPop.className = 'calpop'; calPop.id = 'calPop'; calPop.hidden = true; calPop.setAttribute('role', 'dialog'); calPop.setAttribute('aria-label', '기간 달력');
 winBox.appendChild(calBtn); document.getElementById('winRow').appendChild(calPop);
 const cal = { a: null, b: null, hover: null, view: null };
-const MIN_YM = DAYS[0].slice(0, 7), MAX_YM = ASOF.slice(0, 7);
+const MIN_YM = DAYS[0].slice(0, 7), MAX_YM = ASOF.slice(0, 7), calOne = () => matchMedia('(max-width: 700px)').matches;   // 모바일은 한 달씩
 function openCal() {
   const cur = { i0: state.i0, i1: state.i1 };
   cal.a = DAYS[cur.i0]; cal.b = DAYS[cur.i1]; cal.hover = null;
-  cal.view = ymAdd(cal.b.slice(0, 7), -1) < MIN_YM ? MIN_YM : ymAdd(cal.b.slice(0, 7), -1);
-  if (cal.view > ymAdd(MAX_YM, -1)) cal.view = ymAdd(MAX_YM, -1) < MIN_YM ? MIN_YM : ymAdd(MAX_YM, -1);
+  cal.view = calOne() ? cal.b.slice(0, 7) : ymAdd(cal.b.slice(0, 7), -1) < MIN_YM ? MIN_YM : ymAdd(cal.b.slice(0, 7), -1);
+  if (!calOne() && cal.view > ymAdd(MAX_YM, -1)) cal.view = ymAdd(MAX_YM, -1) < MIN_YM ? MIN_YM : ymAdd(MAX_YM, -1);
   calPop.hidden = false; calBtn.setAttribute('aria-expanded', 'true'); drawCal();
 }
 function closeCal() { calPop.hidden = true; calBtn.setAttribute('aria-expanded', 'false'); }
@@ -659,7 +717,7 @@ calBtn.onclick = e => { e.stopPropagation(); calPop.hidden ? openCal() : closeCa
 document.addEventListener('click', e => { if (!calPop.hidden && !calPop.contains(e.target) && e.target !== calBtn) closeCal(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !calPop.hidden) closeCal(); });
 function drawCal() {
-  const lastY = ymAdd(MAX_YM, -1) < MIN_YM ? MIN_YM : ymAdd(MAX_YM, -1);
+  const lastY = calOne() ? MAX_YM : ymAdd(MAX_YM, -1) < MIN_YM ? MIN_YM : ymAdd(MAX_YM, -1);
   cal.view = cal.view < MIN_YM ? MIN_YM : cal.view > lastY ? lastY : cal.view;
   const lo = cal.a && !cal.b && cal.hover ? (cal.hover < cal.a ? cal.hover : cal.a) : cal.a,
         hi = cal.a && !cal.b && cal.hover ? (cal.hover < cal.a ? cal.a : cal.hover) : cal.b;
@@ -686,11 +744,11 @@ function drawCal() {
     <div class="calnav"><button type="button" data-n="-12" title="1년 전">«</button><button type="button" data-n="-1" title="이전 달">‹</button>
       <span class="calhint">${cal.a && !cal.b ? '종료일을 누르세요 (같은 날을 다시 누르면 하루)' : '날짜 두 번(시작·종료) 또는 월 이름을 누른 뒤 확인'}</span>
       <button type="button" data-n="1" title="다음 달">›</button><button type="button" data-n="12" title="1년 뒤">»</button></div>
-    <div class="calms">${month(cal.view)}${ymAdd(cal.view, 1) <= MAX_YM ? month(ymAdd(cal.view, 1)) : ''}</div>
+    <div class="calms">${month(cal.view)}${!calOne() && ymAdd(cal.view, 1) <= MAX_YM ? month(ymAdd(cal.view, 1)) : ''}</div>
     <div class="calft"><span class="calsum">${cal.a ? (() => { const b = cal.b || cal.a, n = DAYS.indexOf(b) - DAYS.indexOf(cal.a) + 1; return `${n}일 선택`; })() : ''}</span>
       <button type="button" class="chip calno">취소</button><button type="button" class="chip calok" aria-pressed="true"${cal.a ? '' : ' disabled'}>확인</button></div>`;
   calPop.querySelectorAll('.calnav [data-n]').forEach(b => b.onclick = e => { e.stopPropagation(); cal.view = ymAdd(cal.view, +b.dataset.n); drawCal(); });
-  const draft = (a, b) => { cal.a = a < DAYS[0] ? DAYS[0] : a; cal.b = b > ASOF ? ASOF : b; cal.hover = null; cal.view = ymAdd(cal.b.slice(0, 7), -1); drawCal(); };
+  const draft = (a, b) => { cal.a = a < DAYS[0] ? DAYS[0] : a; cal.b = b > ASOF ? ASOF : b; cal.hover = null; cal.view = calOne() ? cal.b.slice(0, 7) : ymAdd(cal.b.slice(0, 7), -1); drawCal(); };
   calPop.querySelectorAll('.calpre [data-a]').forEach(b => b.onclick = e => { e.stopPropagation(); draft(b.dataset.a, b.dataset.b); });
   calPop.querySelectorAll('.calmt').forEach(b => b.onclick = e => { e.stopPropagation(); const m = b.dataset.m, v = cal.view;
     draft(`${m}-01`, `${m}-${String(daysInMonth(m)).padStart(2, '0')}`); cal.view = v; drawCal(); });
@@ -885,11 +943,22 @@ function renderSales(L) {
       <span class="ksub">${p.prv ? `${cmpLabel} ${wonFull(p.prv.g)} · ${arrow(p.cur.g - p.prv.g, p.prv.g ? Math.abs((p.cur.g - p.prv.g) / p.prv.g * 100).toFixed(1) + '%' : '')}` : `일평균 ${wonFull(p.cur.g / W)}`}</span></div>`).join('')}</div>
     <div class="kgroup five">${ORDER.map(p => `<div class="kcell kclick" data-grp="${p.key}" title="${p.key ? `아래 전체 SKU를 ${p.key}만 보기` : '아래 전체 SKU를 전체로'}"><span class="ktag">${p.lp}</span><span class="kval">${isFinite(p.ppmC) ? (p.ppmC * 100).toFixed(2) + '%' : '–'}</span>
       <span class="ksub">${p.prv && isFinite(p.ppmP) && isFinite(p.ppmC) ? `${cmpLabel} ${(p.ppmP * 100).toFixed(2)}% · ${arrow(p.ppmC - p.ppmP, Math.abs((p.ppmC - p.ppmP) * 100).toFixed(2) + '%p')}` : (!p.cur.g ? '판매 없음' : !p.prv ? '비교 자료 없음' : '비교 기간 판매 없음')}</span></div>`).join('')}</div>
-    <div class="kgroup five pmcrow">${pmcCell}${poFcCard()}</div>`;
+    <div class="kgroup five pmcrow">${pmcCell}${poFcCard()}</div>
+    <div class="mk">
+      <table class="mkt"><thead><tr><th class="l"></th><th>매출 <small>${cmpLabel} 대비</small></th><th>PPM <small>${cmpLabel} 대비</small></th></tr></thead><tbody>
+      ${ORDER.map((p, i) => `<tr class="kclick" data-grp="${p.key}"><th class="l" scope="row">${['총', '커피/차', '음료', '별도 원두', '기타'][i]}</th>
+        <td><b>${won(p.cur.g)}</b><small>${p.prv ? arrow(p.cur.g - p.prv.g, p.prv.g ? Math.abs((p.cur.g - p.prv.g) / p.prv.g * 100).toFixed(1) + '%' : '') : ''}</small></td>
+        <td><b>${isFinite(p.ppmC) ? (p.ppmC * 100).toFixed(1) + '%' : '–'}</b><small>${p.prv && isFinite(p.ppmP) && isFinite(p.ppmC) ? arrow(p.ppmC - p.ppmP, Math.abs((p.ppmC - p.ppmP) * 100).toFixed(1) + '%p') : ''}</small></td></tr>`).join('')}
+      </tbody></table>
+      <div class="mkrow"><div><span class="ktag">PMC</span><b>${won(pmcC)}</b><small>매출 대비 ${totG ? (pmcC / totG * 100).toFixed(2) + '%' : '–'}</small></div>
+        ${(F => F ? `<div class="mkfc" id="fcCardM"><span class="ktag">${F.M}월 마감 예상 매입</span><b>약 ${won(F.T.est)}</b><small>VAT 제외${F.band != null ? ` · ±${eok1(F.band)}` : ''} · 발주 ${pct((F.T.R + F.T.S) / F.T.est, 0)} 진행 ›</small></div>` : '')(poForecast())}</div>
+    </div>`;
   document.querySelectorAll('#kpiSales .kclick').forEach(c => c.onclick = () => {
     const g = c.dataset.grp; state.sf.grp = g && g !== state.sf.grp ? g : ''; markGrpCards(); renderSalesTable(list());
   });
   markGrpCards();
+  const fccM = document.getElementById('fcCardM');
+  if (fccM) fccM.onclick = () => { setTab('stock', true); requestAnimationFrame(() => document.getElementById('poFc').scrollIntoView({ behavior: 'smooth', block: 'start' })); };
   const fcc = document.getElementById('fcCard');
   if (fcc) fcc.onclick = () => { setTab('stock', true); requestAnimationFrame(() => document.getElementById('poFc').scrollIntoView({ behavior: 'smooth', block: 'start' })); };
 
@@ -953,6 +1022,7 @@ function renderSales(L) {
   a.innerHTML = `⬇ 판매 현황 raw data<small>${ts ? `${+ts.slice(4, 6)}/${+ts.slice(6, 8)} ${ts.slice(8, 10)}:${ts.slice(10, 12)} 업로드` : f}</small>`;
 })();
 function initSalesFilters() {
+  if (matchMedia('(max-width: 700px)').matches) document.querySelectorAll('details.tfold').forEach(d => d.open = false);
   document.getElementById('sfGrpTag').onclick = () => { state.sf.grp = ''; markGrpCards(); renderSalesTable(list()); };
   DATA.skus.forEach(k => k.docPOs = k.pend ? k.docPO : null);   // 입고 예정 없는 SKU는 정렬에서 맨 뒤
   const cats = [...new Set(DATA.skus.map(k => k.cat))].sort((a, b) => a.localeCompare(b, 'ko'));
