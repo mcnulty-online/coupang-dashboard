@@ -447,7 +447,6 @@ table.heat td.l { text-align: left; }
         </select>
         <button class="chip" id="sfReset">필터 초기화</button>
       </div>
-      <p class="desc">열 제목을 누르면 정렬, 행을 누르면 SKU 상세가 열립니다. 10개가 넘으면 표 안에서 스크롤됩니다.</p>
       <div class="stlegend" id="stLegSales"></div>
       </details>
       <div class="tbl-wrap scroll10"><table id="tTop"></table></div>
@@ -459,7 +458,6 @@ table.heat td.l { text-align: left; }
     <div class="kpis" id="kpiStock"></div>
     <div class="panel">
       <div class="toolbar"><h2>전체 SKU 재고 <span class="hcount" id="nAll"></span></h2><div class="tfilters"><input type="search" id="stockSearch" placeholder="SKU명·ID·세부카테고리 검색" aria-label="전체 SKU 재고 검색"></div></div>
-      <p class="desc">열 제목을 누르면 정렬, 행을 누르면 SKU 상세가 열립니다. 7개가 넘으면 표 안에서 스크롤됩니다.</p>
       <div class="stlegend" id="stLegStock"></div>
       <div class="tbl-wrap scroll7"><table id="tAll"></table></div>
     </div>
@@ -1581,7 +1579,7 @@ function renderYoyAll() {
   const v = x => x[key] == null ? (dir < 0 ? -Infinity : Infinity) : x[key];
   rows.sort((a, b) => dir * (v(a) - v(b)) || b.gc - a.gc);
   document.getElementById('nYAll').textContent = rows.length + '개';
-  document.getElementById('yAllDesc').textContent = `${per.desc} · 열 제목을 누르면 정렬, 행을 누르면 SKU 상세가 열립니다. 10개가 넘으면 표 안에서 스크롤됩니다.`;
+  document.getElementById('yAllDesc').textContent = per.desc;
   const t = document.getElementById('tYAll');
   t.innerHTML = headRow(YACOLS, state.yaSort, 'data-i') + '<tbody>' + (rows.length ? rows.map(x => `<tr class="${x.k.cur ? 'click' : ''}" data-id="${x.k.id}" data-yoy="1">
       <td class="l name">${esc(x.k.name)}<span class="cat">${esc(x.k.cat)} · ${x.k.id}${x.k.cur ? '' : ' · 판매 중단'}</span></td>
