@@ -293,6 +293,7 @@ h2.sec .note { font-weight: 400; }
   #tTop th:nth-child(2) { z-index: 2; }
 }
 #winRow { position: relative; }
+#yWinRow { position: relative; }
 .calbtn { display: inline-flex; align-items: center; gap: 6px; }
 .calbtn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; }
 .calpop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; max-height: calc(100dvh - 190px); overflow: auto; overscroll-behavior: contain; width: min(600px, calc(100vw - 32px)); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.16); padding: 14px 16px 12px; display: grid; gap: 10px; }
@@ -371,8 +372,6 @@ table.heat td.l { text-align: left; }
 .drawer-body { flex: 1; overflow: auto; overscroll-behavior: contain; padding-bottom: env(safe-area-inset-bottom, 0px); }
 .drawer .dpanel { position: static; max-width: none; }
 @media (max-width: 700px) { .drawer-panel { width: 100vw; } .drawer-bar { padding-inline: 16px; } .drawer .dpanel { padding-inline: 16px; } }
-.pastsel { width: 150px; max-width: 100%; text-overflow: ellipsis; font: inherit; font-size: 13px; border-radius: 999px; padding: 4px 10px; }
-.pastsel.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .stlegend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 12px; color: var(--ink-2); }
 .stlegend .pill { margin-left: 6px; }
 .stlegend .flabel { margin-right: 2px; }
@@ -719,18 +718,19 @@ const ymAdd = (ym, n) => { const d = new Date(+ym.slice(0, 4), +ym.slice(5, 7) -
 const calBtn = document.createElement('button'); calBtn.className = 'chip calbtn'; calBtn.id = 'calBtn'; calBtn.setAttribute('aria-haspopup', 'dialog');
 const calPop = document.createElement('div'); calPop.className = 'calpop'; calPop.id = 'calPop'; calPop.hidden = true; calPop.setAttribute('role', 'dialog'); calPop.setAttribute('aria-label', '기간 달력');
 winBox.appendChild(calBtn); document.getElementById('winRow').appendChild(calPop);
-const cal = { a: null, b: null, hover: null, view: null };
+const cal = { a: null, b: null, hover: null, view: null, target: 'sales', btn: calBtn };
 const MIN_YM = DAYS[0].slice(0, 7), MAX_YM = ASOF.slice(0, 7), calOne = () => matchMedia('(max-width: 700px)').matches;   // 모바일은 한 달씩
-function openCal() {
-  const cur = { i0: state.i0, i1: state.i1 };
-  cal.a = DAYS[cur.i0]; cal.b = DAYS[cur.i1]; cal.hover = null;
+// target: 'sales'(판매 현황 기간) | 'yoy'(추이·YoY 비교 기간) — 같은 달력을 해당 줄 아래로 옮겨서 씀
+function openCal(target = 'sales', btn = calBtn, range = [DAYS[state.i0], DAYS[state.i1]]) {
+  cal.target = target; cal.btn = btn; btn.parentElement.closest('.filters').appendChild(calPop);
+  cal.a = range[0]; cal.b = range[1]; cal.hover = null;
   cal.view = calOne() ? cal.b.slice(0, 7) : ymAdd(cal.b.slice(0, 7), -1) < MIN_YM ? MIN_YM : ymAdd(cal.b.slice(0, 7), -1);
   if (!calOne() && cal.view > ymAdd(MAX_YM, -1)) cal.view = ymAdd(MAX_YM, -1) < MIN_YM ? MIN_YM : ymAdd(MAX_YM, -1);
-  calPop.hidden = false; calBtn.setAttribute('aria-expanded', 'true'); drawCal();
+  calPop.hidden = false; btn.setAttribute('aria-expanded', 'true'); drawCal();
 }
-function closeCal() { calPop.hidden = true; calBtn.setAttribute('aria-expanded', 'false'); }
-calBtn.onclick = e => { e.stopPropagation(); calPop.hidden ? openCal() : closeCal(); };
-document.addEventListener('click', e => { if (!calPop.hidden && !calPop.contains(e.target) && e.target !== calBtn) closeCal(); });
+function closeCal() { calPop.hidden = true; cal.btn.setAttribute('aria-expanded', 'false'); }
+calBtn.onclick = e => { e.stopPropagation(); calPop.hidden || cal.target !== 'sales' ? openCal() : closeCal(); };
+document.addEventListener('click', e => { if (!calPop.hidden && !calPop.contains(e.target) && !e.target.closest('.calbtn')) closeCal(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !calPop.hidden) closeCal(); });
 function drawCal() {
   const lastY = calOne() ? MAX_YM : ymAdd(MAX_YM, -1) < MIN_YM ? MIN_YM : ymAdd(MAX_YM, -1);
@@ -751,7 +751,7 @@ function drawCal() {
   };
   const fmt = d => d ? `${d}(${wd(d)})` : '종료일 선택';
   const yesterday = DAYS[N - 2], lm = ymAdd(MAX_YM, -1);
-  const presets = [['어제', yesterday, yesterday], ['최근 7일', DAYS[Math.max(0, N - 7)], ASOF], ['최근 30일', DAYS[Math.max(0, N - 30)], ASOF],
+  const presets = cal.target === 'yoy' ? yoyPresets() : [['어제', yesterday, yesterday], ['최근 7일', DAYS[Math.max(0, N - 7)], ASOF], ['최근 30일', DAYS[Math.max(0, N - 30)], ASOF],
     ['지난달', `${lm}-01`, `${lm}-${String(daysInMonth(lm)).padStart(2, '0')}`],
     ...WINS.filter(w => w.grp === '연도' && !w.quick).map(w => [w.label.replace(/ \(.*\)/, ''), DAYS[w.i0], DAYS[w.i1]])];
   calPop.innerHTML = `
@@ -768,7 +768,7 @@ function drawCal() {
   calPop.querySelectorAll('.calpre [data-a]').forEach(b => b.onclick = e => { e.stopPropagation(); draft(b.dataset.a, b.dataset.b); });
   calPop.querySelectorAll('.calmt').forEach(b => b.onclick = e => { e.stopPropagation(); const m = b.dataset.m, v = cal.view;
     draft(`${m}-01`, `${m}-${String(daysInMonth(m)).padStart(2, '0')}`); cal.view = v; drawCal(); });
-  calPop.querySelector('.calok').onclick = e => { e.stopPropagation(); if (!cal.a) return; const a = cal.a, b = cal.b || cal.a; closeCal(); setRange(a, b); };
+  calPop.querySelector('.calok').onclick = e => { e.stopPropagation(); if (!cal.a) return; const a = cal.a, b = cal.b || cal.a; closeCal(); (cal.target === 'yoy' ? setYRange : setRange)(a, b); };
   calPop.querySelector('.calno').onclick = e => { e.stopPropagation(); closeCal(); };
   calPop.querySelectorAll('.cd:not(.off)').forEach(b => {
     b.onclick = e => { e.stopPropagation(); const d = b.dataset.d;
@@ -1502,7 +1502,11 @@ function yPeriods() {
 const YPER = yPeriods();
 // SKU 하나의 [이번, 작년] 합계
 const DSKU = new Map(DATA.skus.map(k => [k.id, k]));
+// 전년 같은 날짜의 DAYS 인덱스 (2/29는 전년에 없으니 -1)
+const LYIX = (() => { const m = new Map(DAYS.map((d, i) => [d, i])); return DAYS.map(d => { const y = `${+d.slice(0, 4) - 1}${d.slice(4)}`; return m.has(y) ? m.get(y) : -1; }); })();
 function perVal(k, f, per) {
+  if (per.rng) { const d = DSKU.get(k.id); if (!d || !d[f]) return [0, 0]; let c = 0, l = 0;
+    for (let i = per.rng[0]; i <= per.rng[1]; i++) { c += d[f][i] || 0; const j = LYIX[i]; if (j >= 0) l += d[f][j] || 0; } return [c, l]; }
   if (per.day) { const d = DSKU.get(k.id); if (!d || !d[f]) return [0, 0]; return [d[f][per.day[0]] || 0, per.day[1] >= 0 ? d[f][per.day[1]] || 0 : 0]; }
   let cur = 0, ly = 0;
   per.months.forEach(i => { cur += k[f][i]; const j = mIdx(lyOf(HM[i])); if (j >= 0) ly += k[f][j]; });
@@ -1513,6 +1517,34 @@ function hList() {
   if (!H) return [];
   return H.skus.filter(k => (state.grp === '전체' || k.grp === state.grp) && (state.brand === '전체' || k.brand === state.brand));
 }
+// 달력으로 고른 기간: state.yper = 'rng:시작:끝'
+const lyD = d => `${+d.slice(0, 4) - 1}${d.slice(4)}`;
+function yRngPer(id) {
+  const [, a, b] = id.split(':'), i0 = DAYS.indexOf(a), i1 = DAYS.indexOf(b); if (i0 < 0 || i1 < i0) return null;
+  const yr = d => d.slice(0, 4) === ASOF.slice(0, 4) ? '' : `${d.slice(2, 4)}년 `;
+  const label = a === b ? `${yr(a)}${md(a)}(${wd(a)})` : `${yr(a)}${md(a)}~${a.slice(0, 4) === b.slice(0, 4) ? '' : yr(b)}${md(b)}`;
+  const miss = LYIX[i0] < 0;
+  return { id, label, months: [], rng: [i0, i1], desc: `${a}${a === b ? ` (${wd(a)})` : ` ~ ${b}`} vs 작년 같은 날짜 ${lyD(a)}${a === b ? '' : ` ~ ${lyD(b)}`}${miss ? ' · 전년 자료가 없는 날은 비교에서 빠짐 (24년 6월 이전 자료 없음)' : ''}` };
+}
+const curYPer = () => (state.yper.startsWith('rng:') && yRngPer(state.yper)) || YPER.find(p => p.id === state.yper) || YPER[YPER.length - 1];
+const lastDay = ym => `${ym}-${String(daysInMonth(ym)).padStart(2, '0')}`;
+function perRange(p) {
+  if (p.rng) return [DAYS[p.rng[0]], DAYS[p.rng[1]]];
+  if (p.day) return [DAYS[p.day[0]], DAYS[p.day[0]]];
+  const a = p.months.length ? HM[p.months[0]] + '-01' : curYM + '-01';
+  return [a < DAYS[0] ? DAYS[0] : a, p.mtd ? ASOF : lastDay(HM[p.months[p.months.length - 1]])];
+}
+function setYRange(a, b) {
+  if (b < a) [a, b] = [b, a];
+  a = a < DAYS[0] ? DAYS[0] : a; b = b > ASOF ? ASOF : b;
+  const hit = YPER.find(p => { const [x, y] = perRange(p); return x === a && y === b; });
+  state.yper = hit ? hit.id : `rng:${a}:${b}`; renderYoy(list());
+}
+function yoyPresets() {
+  const lm = ymAdd(MAX_YM, -1);
+  return [['어제', DAYS[N - 2], DAYS[N - 2]], ['최근 7일', DAYS[Math.max(0, N - 7)], ASOF], ['최근 30일', DAYS[Math.max(0, N - 30)], ASOF],
+    ['지난달', `${lm}-01`, lastDay(lm)], ...YPER.filter(p => !p.quick && p.grp !== '월별').map(p => [p.label, ...perRange(p)])];
+}
 const yoyTxt = (c, l) => l ? `<span class="${c < l ? 'neg' : 'pos'}">${c >= l ? '+' : ''}${((c - l) / l * 100).toFixed(1)}%</span>` : (c ? '<span class="muted">신규</span>' : '–');
 const ppTxt = d => isFinite(d) ? `<span class="${d < 0 ? 'neg' : 'pos'}">${d >= 0 ? '+' : ''}${(d * 100).toFixed(1)}%p</span>` : '–';
 const mval = v => state.ym === 'g' ? won(v) : n0(v);
@@ -1522,10 +1554,9 @@ if (H) {
   const yc = document.getElementById('yPerChips');
   YPER.filter(p => p.quick).forEach(p => { const b = document.createElement('button'); b.className = 'chip'; b.id = 'yp-' + p.id; b.textContent = p.label;
     b.onclick = () => { state.yper = p.id; renderYoy(list()); }; yc.appendChild(b); });
-  const ys = document.createElement('select'); ys.id = 'yPerSel'; ys.className = 'pastsel'; ys.setAttribute('aria-label', '지난 기간 선택');
-  ys.innerHTML = '<option value="">지난 기간 ▾</option>' + [...new Set(YPER.filter(p => !p.quick).map(p => p.grp))].map(g => `<optgroup label="${g}">${YPER.filter(p => !p.quick && p.grp === g).map(p => `<option value="${p.id}">${p.label}</option>`).join('')}</optgroup>`).join('');
-  ys.onchange = () => { if (!ys.value) return; state.yper = ys.value; renderYoy(list()); };
-  yc.appendChild(ys);
+  const yb = document.createElement('button'); yb.className = 'chip calbtn'; yb.id = 'yCalBtn'; yb.setAttribute('aria-haspopup', 'dialog');
+  yb.onclick = e => { e.stopPropagation(); if (!calPop.hidden && cal.target === 'yoy') return closeCal(); openCal('yoy', yb, perRange(curYPer())); };
+  yc.appendChild(yb);
   document.querySelectorAll('#yMetric button').forEach(b => b.onclick = () => { state.ym = b.id.slice(3); renderYoy(list()); });
 }
 
@@ -1540,7 +1571,7 @@ const YACOLS = [
 ];
 function renderYoyAll() {
   if (!H) return;
-  const per = YPER.find(p => p.id === state.yper) || YPER[YPER.length - 1], q = state.yaq.toLowerCase();
+  const per = curYPer(), q = state.yaq.toLowerCase();
   const rows = hList().map(k => {
     const [gc, gl] = perVal(k, 'g', per), [qc, ql] = perVal(k, 'q', per), [cc, cl] = perVal(k, 'c', per);
     const pc = gc ? (gc - cc * 1.1) / gc : null, pl = gl ? (gl - cl * 1.1) / gl : null;
@@ -1570,9 +1601,10 @@ if (H) document.getElementById('yaSearch').addEventListener('input', e => { stat
 
 function renderYoy() {
   if (!H) return;
-  const L = hList(), per = YPER.find(p => p.id === state.yper) || YPER[YPER.length - 1], m = state.ym, B = baseOpts();
+  const L = hList(), per = curYPer(), m = state.ym, B = baseOpts();
   document.querySelectorAll('#yPerChips .chip').forEach(c => c.setAttribute('aria-pressed', c.id === 'yp-' + per.id));
-  const ysel = document.getElementById('yPerSel'); ysel.value = per.quick ? '' : per.id; ysel.classList.toggle('on', !per.quick);
+  const yb = document.getElementById('yCalBtn'); yb.setAttribute('aria-pressed', !per.quick);
+  yb.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"/></svg>${per.quick ? '지난 기간' : esc(per.label)}`;
   document.querySelectorAll('#yMetric button').forEach(b => b.setAttribute('aria-pressed', b.id === 'ym-' + m));
   document.getElementById('yPerDesc').textContent = `비교: ${per.desc} · 상단 카테고리·브랜드 필터가 적용됩니다.`;
   document.getElementById('period').innerHTML = `기준일 <b>${ASOF} (${wd(ASOF)})</b> · 비교 기간 ${per.label}`;
