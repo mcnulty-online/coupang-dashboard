@@ -685,13 +685,15 @@ const state = { win: 'd1', grp: '전체', brand: '전체', tab: 'sales', q: '', 
   sort: { key: 'G', dir: -1 }, aSort: { key: 'stockVal', dir: -1 } };
 const brands = [...new Set(DATA.skus.map(k => k.brand))].sort();
 // 재고·발주 탭: 기간과 무관 (기준일 재고·발주·최근 30일 판매가 있는 SKU)
-function stockList() { return DATA.skus.filter(k => (state.grp === '전체' || k.grp === state.grp) && (state.brand === '전체' || k.brand === state.brand) && (k.inOps || k.pend > 0 || k.G30 > 0)); }
+function stockList() { return DATA.skus.filter(k => grpOk(k) && (state.brand === '전체' || k.brand === state.brand) && (k.inOps || k.pend > 0 || k.G30 > 0)); }
 // 매출 그룹 기준 (판매 현황 카드·예상 매입 공용). 별도 관리 원두 SKU ID는 여기서 관리
 const SEP_BEANS = [80661387, 80686777, 80855135, 80855134, 80855137];
 const ETC_SUB = ['Kitchen Appliance', 'Tools & Gadgets'];
 const GROUPS = ['커피/차', '음료', '별도 관리 원두', '기타'];
+// 위 카테고리 버튼: 커피는 별도 관리 원두를 뺀 커피, 별도 원두는 그 5개 SKU만
+const grpOk = k => state.grp === '전체' ? true : state.grp === '별도 원두' ? SEP_BEANS.includes(k.id) : k.grp === state.grp && !(state.grp === '커피' && SEP_BEANS.includes(k.id));
 const groupOf = k => SEP_BEANS.includes(k.id) ? '별도 관리 원두' : ETC_SUB.includes(k.sub) ? '기타' : k.grp === '커피' ? '커피/차' : k.grp === '음료' ? '음료' : '그 외';
-function list() { return DATA.skus.filter(k => (state.grp === '전체' || k.grp === state.grp) && (state.brand === '전체' || k.brand === state.brand) && (k.inOps || k.pend > 0 || k.G > 0)); }
+function list() { return DATA.skus.filter(k => grpOk(k) && (state.brand === '전체' || k.brand === state.brand) && (k.inOps || k.pend > 0 || k.G > 0)); }
 
 /* ---------- 컨트롤 ---------- */
 const winBox = document.getElementById('winChips');
@@ -776,7 +778,7 @@ function drawCal() {
   });
 }
 const chipBox = document.getElementById('grpChips');
-['전체', '커피', '음료', '기타'].forEach(g => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = g; b.id = 'grp-' + g;
+['전체', '커피', '음료', '별도 원두', '기타'].forEach(g => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = g; b.id = 'grp-' + g;
   b.onclick = () => { state.grp = g; if (state.sf) state.sf.grp = ''; renderAll(); }; chipBox.appendChild(b); });   // 위 카테고리를 고르면 카드로 고른 그룹 보기는 해제
 const bs = document.getElementById('brandSel');
 bs.innerHTML = ['전체', ...brands].map(b => `<option>${esc(b)}</option>`).join('');
@@ -923,7 +925,7 @@ function renderSales(L) {
   const { i0, W } = state;
   const G = sum(L.map(k => k.G)), Q = sum(L.map(k => k.Q)), C = sum(L.map(k => k.C)), R = sum(L.map(k => k.R)),
         P = sum(L.map(k => k.P)), V = sum(L.map(k => k.V)), O = sum(L.map(k => k.O));
-  const pr = state.prev, LA = DATA.skus.filter(k => (state.grp === '전체' || k.grp === state.grp) && (state.brand === '전체' || k.brand === state.brand));
+  const pr = state.prev, LA = DATA.skus.filter(k => grpOk(k) && (state.brand === '전체' || k.brand === state.brand));
   const prevG = pr && pr[0] >= 0 ? sum(LA.map(k => sum(k.g.slice(pr[0], pr[1] + 1)))) : null;
   const chg = prevG ? (G - prevG) / prevG : null;
   // ---- 매출·PPM 카드 (총 / 커피·차 / 음료) — 카테고리 필터와 무관하게 브랜드 필터만 적용 ----
@@ -1513,7 +1515,7 @@ function perVal(k, f, per) {
 }
 function hList() {
   if (!H) return [];
-  return H.skus.filter(k => (state.grp === '전체' || k.grp === state.grp) && (state.brand === '전체' || k.brand === state.brand));
+  return H.skus.filter(k => grpOk(k) && (state.brand === '전체' || k.brand === state.brand));
 }
 // 달력으로 고른 기간: state.yper = 'rng:시작:끝'
 const lyD = d => `${+d.slice(0, 4) - 1}${d.slice(4)}`;
