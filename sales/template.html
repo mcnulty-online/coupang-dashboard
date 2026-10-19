@@ -777,7 +777,7 @@ function drawCal() {
 }
 const chipBox = document.getElementById('grpChips');
 ['전체', '커피', '음료', '기타'].forEach(g => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = g; b.id = 'grp-' + g;
-  b.onclick = () => { state.grp = g; renderAll(); }; chipBox.appendChild(b); });
+  b.onclick = () => { state.grp = g; if (state.sf) state.sf.grp = ''; renderAll(); }; chipBox.appendChild(b); });   // 위 카테고리를 고르면 카드로 고른 그룹 보기는 해제
 const bs = document.getElementById('brandSel');
 bs.innerHTML = ['전체', ...brands].map(b => `<option>${esc(b)}</option>`).join('');
 bs.onchange = () => { state.brand = bs.value; renderAll(); };
