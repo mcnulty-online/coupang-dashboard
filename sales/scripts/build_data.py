@@ -68,7 +68,7 @@ for f in sorted(glob.glob(os.path.join(IN, 'PO_SKU_LIST*.csv'))):
     pm_parts.append(pd.read_csv(f, encoding='utf-8-sig').assign(_ts=ts))
 pa = None
 if pm_parts:
-    pa = pd.concat([x[[c for c in ['_ts', '발주번호', '발주현황', 'SKU ID', '발주일', '입고예정일', '매입가', '공급가', '총발주 매입금', '입고금액'] if c in x.columns]] for x in pm_parts], ignore_index=True)
+    pa = pd.concat([x[[c for c in ['_ts', '발주번호', '발주현황', 'SKU ID', 'SKU 이름', '발주일', '입고예정일', '매입가', '공급가', '총발주 매입금', '입고금액'] if c in x.columns]] for x in pm_parts], ignore_index=True)
     pa = pa.sort_values('_ts', kind='stable').drop_duplicates(['발주번호', 'SKU ID'], keep='last')
     pa['od'] = pd.to_datetime(pa['발주일'].astype(str).str[:10])
     pa['ed'] = pd.to_datetime(pa['입고예정일'].astype(str).str[:10])
@@ -221,6 +221,22 @@ if HIST:
     hist = dict(months=months, mtdDays=int(endd.day), lyStart=ly_start, lyEnd=ly_end, skus=list(hsku.values()), days0=hdays[0], daily=daily)
     tot = sum(sum(k['g']) for k in hsku.values())
     print(f'이력: {months[0]} ~ {months[-1]} ({M}개월) · SKU {len(hsku)} · GMV {tot:,} = {int(allS["매출액(GMV)"].sum()):,} · 일별 {len(hdays)}일 × {len(daily)}그룹')
+
+# 별도 관리 원두는 판매·재고 자료에 아직 없어도(발주만 있거나 아무 자료 없음) 늘 목록에 보이게 빈 행으로 추가
+SEP_ALWAYS = [80661387, 80686777, 80855135, 80855134, 80855137]
+_have = {k['id'] for k in skus}
+_brand = next((k['brand'] for k in skus if k['id'] in SEP_ALWAYS), '')
+for sid in SEP_ALWAYS:
+    if sid in _have: continue
+    lines = po_lines.get(sid, [])
+    nm = next((x['name'] for x in po_only if x['id'] == sid), None)
+    if nm is None and pa is not None and 'SKU 이름' in pa:
+        _n = pa.loc[pa['SKU ID'] == sid, 'SKU 이름'].dropna()
+        nm = _n.iloc[-1] if len(_n) else None
+    skus.append(dict(id=sid, name=nm or f'SKU {sid}', cat='원두', brand=_brand, sub=None, grp='커피', status='정보없음', order='정보없음',
+                     rating=None, reviews=0, inOps=False, uc=None, ctr={}, po=lines, **{k: [0] * N for k in F}))
+    po_only = [x for x in po_only if x['id'] != sid]
+    print(f'별도 관리 원두 {sid} ({nm or "이름 없음"}): 판매·재고 자료 없음 → 빈 행으로 추가 (발주 {len(lines)}건)')
 
 # ---- 당월 마감 예상 매입금액 (VAT 제외, 입고예정일 기준 월, 발주금액 기준 · 발주된 건은 모두 입고된다고 가정) ----
 #  예상 = 이미 발주된 이번 달 입고분(발주금액, 공급가 기준)
