@@ -17,11 +17,32 @@ HIST = sys.argv[3] if len(sys.argv) > 3 else None
 POH = sys.argv[4] if len(sys.argv) > 4 else None
 
 
+# 쿠팡이 열 이름의 띄어쓰기를 바꿔도(예: 'SKU명' → 'SKU 명') 같은 열로 인식하도록 기준 이름으로 맞춤
+SALES_COLS = ['날짜', '상품 ID', '바코드', 'SKU ID', 'SKU명', '벤더아이템 ID', '벤더아이템명', '로켓프레시', '상품카테고리', '하위카테고리',
+              '세부카테고리', '브랜드', '매출액(GMV)', '판매 수량 (SKU ID)', '반품 수량', '매입원가(COGS)', 'AMV',
+              '쿠폰 할인가(쿠팡 추가 할인가 제외)', '쿠팡 추가 할인가', '즉시 할인가', '프로모션 발생 매출액', '프로모션 발생 판매 수량',
+              '평균 판매 금액', '주문건수', '주문 고객 수', '객단가', '구매전환율 (%)', '조회수', '판매 수량 (벤더아이템 ID)', '상품평 수', '평균 상품 평점']
+OPS_COLS = ['날짜', '상품 카테고리', '하위 카테고리', '세부 카테고리', '브랜드', '센터', 'SKU ID', 'SKU 명', '바코드', '발주가능상태',
+            '발주가능상태_세부', '입고수량', '출고수량', '현재재고수량', '매입원가', '발주대비 납품율', '확정대비 납품율', '회송율', '회송사유',
+            '품절여부', '세부카테고리 품절율']
+PO_COLS = ['발주번호', '발주유형', '발주현황', 'SKU ID', 'SKU 이름', '물류센터', '입고예정일', '발주일', '확정수량', '입고수량', '면세여부',
+           '매입가', '공급가', '부가세', '총발주 매입금', '입고금액']
+
+
+def canon(df, cols):
+    key = lambda c: str(c).replace(' ', '').replace('\ufeff', '')
+    m = {key(c): c for c in cols}
+    ren = {c: m[key(c)] for c in df.columns if key(c) in m and m[key(c)] != c}
+    if ren:
+        print('열 이름 보정:', ren)
+    return df.rename(columns=ren)
+
+
 def read_hist(path):
     """과거 판매 이력: .csv.gz(GitHub용) 또는 .pkl"""
     if path.endswith('.pkl'):
         return pd.read_pickle(path)
-    h = pd.read_csv(path, encoding='utf-8', low_memory=False)
+    h = canon(pd.read_csv(path, encoding='utf-8', low_memory=False), SALES_COLS)
     h['날짜'] = pd.to_datetime(h['날짜'])
     return h
 
@@ -30,14 +51,14 @@ DRINK = {'과일음료', '농축액(음료베이스)', '둥글레/옥수수/보�
 grp = lambda c: '커피' if c in COFFEE else ('음료' if c in DRINK else '기타')
 
 
-def load(pattern, date_col, parse):
+def load(pattern, date_col, parse, cols):
     """여러 파일을 합치되, 같은 날짜는 파일명이 가장 뒤(최신)인 파일의 행만 남김."""
     files = sorted(glob.glob(os.path.join(IN, pattern)))
     if not files:
         sys.exit(f'입력 파일 없음: {pattern}')
     parts = []
     for rank, f in enumerate(files):
-        df = pd.read_csv(f, encoding='utf-8-sig')
+        df = canon(pd.read_csv(f, encoding='utf-8-sig'), cols)
         df['d'] = parse(df[date_col])
         df['_rank'] = rank
         parts.append(df)
@@ -48,12 +69,12 @@ def load(pattern, date_col, parse):
     return df, files
 
 
-s, sfiles = load('*SALES_ANALYSIS_DAILY_PERFORMANCE*.csv', '날짜', lambda x: pd.to_datetime(x).dt.strftime('%Y-%m-%d'))
-o, ofiles = load('basic_operation_rocket*.csv', '날짜', lambda x: pd.to_datetime(x.astype(str), format='%Y%m%d').dt.strftime('%Y-%m-%d'))
+s, sfiles = load('*SALES_ANALYSIS_DAILY_PERFORMANCE*.csv', '날짜', lambda x: pd.to_datetime(x).dt.strftime('%Y-%m-%d'), SALES_COLS)
+o, ofiles = load('basic_operation_rocket*.csv', '날짜', lambda x: pd.to_datetime(x.astype(str), format='%Y%m%d').dt.strftime('%Y-%m-%d'), OPS_COLS)
 
 # 발주: 여러 파일이면 (발주번호, SKU) 기준 최신 파일 우선
 pfiles = sorted(glob.glob(os.path.join(IN, 'PO_SKU_LIST*.csv')))[-1:]   # 가장 최근 발주 파일만 사용
-po = pd.concat([pd.read_csv(f, encoding='utf-8-sig').assign(_rank=i) for i, f in enumerate(pfiles)], ignore_index=True) if pfiles else pd.DataFrame()
+po = pd.concat([canon(pd.read_csv(f, encoding='utf-8-sig'), PO_COLS).assign(_rank=i) for i, f in enumerate(pfiles)], ignore_index=True) if pfiles else pd.DataFrame()
 if len(po):
     po = po.sort_values('_rank').drop_duplicates(['발주번호', 'SKU ID'], keep='last')
     print(f'PO: 파일 {len(pfiles)}개, {len(po)}건, 발주일 {po["발주일"].min()[:10]} ~ {po["발주일"].max()[:10]}')
@@ -62,10 +83,10 @@ if len(po):
 # 같은 (발주번호, SKU)는 가장 늦게 내려받은 파일 기준 (_ts = 파일명 시각, 이력 파일은 _ts 열에 기록)
 pm_parts = []
 if POH and os.path.exists(POH):
-    pm_parts.append(pd.read_csv(POH, encoding='utf-8', low_memory=False, dtype={'_ts': str}))
+    pm_parts.append(canon(pd.read_csv(POH, encoding='utf-8', low_memory=False, dtype={'_ts': str}), PO_COLS))
 for f in sorted(glob.glob(os.path.join(IN, 'PO_SKU_LIST*.csv'))):
     ts = ''.join(ch for ch in os.path.basename(f) if ch.isdigit())[-14:]
-    pm_parts.append(pd.read_csv(f, encoding='utf-8-sig').assign(_ts=ts))
+    pm_parts.append(canon(pd.read_csv(f, encoding='utf-8-sig'), PO_COLS).assign(_ts=ts))
 pa = None
 if pm_parts:
     pa = pd.concat([x[[c for c in ['_ts', '발주번호', '발주현황', 'SKU ID', 'SKU 이름', '발주일', '입고예정일', '매입가', '공급가', '총발주 매입금', '입고금액'] if c in x.columns]] for x in pm_parts], ignore_index=True)
@@ -326,7 +347,21 @@ out = dict(opsOffset=ops_off, days=days, asOf=end, generated=datetime.now(timezo
                       po=[os.path.basename(f) for f in pfiles]),
            missingOps=missing_ops, opsStart=ops_start, skus=skus, poOnly=po_only, hist=hist, poFc=po_fc)
 import gzip, base64
-raw = json.dumps(out, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+def _clean(x):
+    # NaN/Infinity 는 브라우저 JSON.parse 가 못 읽어서 대시보드 전체가 안 열림 → null 로 바꿈
+    if isinstance(x, float) and (x != x or x in (float('inf'), float('-inf'))):
+        _clean.n += 1
+        return None
+    if isinstance(x, dict):
+        return {k: _clean(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [_clean(v) for v in x]
+    return x
+_clean.n = 0
+out = _clean(out)
+if _clean.n:
+    print(f'경고: 빈 값(NaN) {_clean.n}개를 null 로 바꿈')
+raw = json.dumps(out, ensure_ascii=False, separators=(',', ':'), allow_nan=False).encode('utf-8')
 with open(OUT, 'w', encoding='utf-8') as f:
     f.write(base64.b64encode(gzip.compress(raw, 9)).decode('ascii'))
 print(f'데이터 {len(raw)/1e6:.1f}MB → 압축 후 {os.path.getsize(OUT)/1e6:.2f}MB')
