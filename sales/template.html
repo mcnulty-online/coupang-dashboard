@@ -1802,11 +1802,11 @@ function renderPoNow() {
   const miss$ = past.c - past.r, fut$ = td.c + rest.c, sh = v => all.c ? v / all.c : 0;
   const pR = y >= P.month + '-01' ? `${M}/1~${+y.slice(8)}` : '-', fR = `${M}/${+cut.slice(8)}~${last}`;
   tiles('kpiPoNow', [
-    { lab: `${M}월 총 발주 (${M}/1~${last})`, val: won(all.c), unit: '원', sub: `${n0(all.n)}건` },
-    { lab: `${pR} 입고일 발주 금액`, val: won(past.c), unit: '원', sub: `${n0(past.n)}건` },
-    { lab: `${pR} 입고일 입고 금액`, val: won(past.r), unit: '원', sub: `입고율 <b>${pct(past.r / past.c)}</b>`, flag: '--good' },
-    { lab: `${fR} 입고 예정 발주 금액`, val: won(fut$), unit: '원', sub: `${n0(td.n + rest.n)}건` },
-    { lab: `${pR} 미납 금액`, val: won(miss$), unit: '원', sub: `${n0(miss.length)}건`, flag: '--crit' }
+    { lab: `${M}월 총 발주<br>(${M}/1~${last})`, val: won(all.c), unit: '원', sub: `${n0(all.n)}건` },
+    { lab: `${pR} 입고일<br>발주 금액`, val: won(past.c), unit: '원', sub: `${n0(past.n)}건` },
+    { lab: `${pR} 입고일<br>입고 금액`, val: won(past.r), unit: '원', sub: `입고율 <b>${pct(past.r / past.c)}</b>`, flag: '--good' },
+    { lab: `${fR} 입고 예정<br>발주 금액`, val: won(fut$), unit: '원', sub: `${n0(td.n + rest.n)}건` },
+    { lab: `${pR}<br>미납 금액`, val: won(miss$), unit: '원', sub: `${n0(miss.length)}건`, flag: '--crit' }
   ]);
   // 칸을 누르면 아래에 내역
   const SETS = [
