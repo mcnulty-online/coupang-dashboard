@@ -89,7 +89,7 @@ for f in sorted(glob.glob(os.path.join(IN, 'PO_SKU_LIST*.csv'))):
     pm_parts.append(canon(pd.read_csv(f, encoding='utf-8-sig'), PO_COLS).assign(_ts=ts))
 pa = None
 if pm_parts:
-    pa = pd.concat([x[[c for c in ['_ts', '발주번호', '발주현황', 'SKU ID', 'SKU 이름', '발주일', '입고예정일', '매입가', '공급가', '총발주 매입금', '입고금액'] if c in x.columns]] for x in pm_parts], ignore_index=True)
+    pa = pd.concat([x[[c for c in ['_ts', '발주번호', '발주현황', 'SKU ID', 'SKU 이름', '발주일', '입고예정일', '매입가', '공급가', '총발주 매입금', '입고금액', '확정수량', '입고수량'] if c in x.columns]] for x in pm_parts], ignore_index=True)
     pa = pa.sort_values('_ts', kind='stable').drop_duplicates(['발주번호', 'SKU ID'], keep='last')
     pa['od'] = pd.to_datetime(pa['발주일'].astype(str).str[:10])
     pa['ed'] = pd.to_datetime(pa['입고예정일'].astype(str).str[:10])
@@ -342,10 +342,27 @@ ops_off = days.index(ops_start)
 for k in skus:
     for f in OPSF + ['so']:
         k[f] = k[f][ops_off:]
+# ---- 당월 발주·입고 현황 (재고·발주 탭 맨 위) ----
+# 납품일(입고예정일)이 이번 달인 발주 라인 · 금액은 VAT 제외 (수량 × 공급가) · 입고는 가장 최근 발주 자료 기준
+po_now = None
+if pa is not None and '확정수량' in pa and '입고수량' in pa:
+    cm = po_cut.to_period('M')
+    L = pa[pa['em'] == cm].copy()
+    unit = L['공급가'].where(L['공급가'] > 0) if '공급가' in L else pd.Series(float('nan'), index=L.index)
+    L['unit'] = unit.fillna(L['매입가'] / 1.1)
+    ST = {'발주확정': 'c', '거래명세서확인요청': 'r', '거래처확인요청': 'v'}
+    lines = [[int(r['SKU ID']), r['ed'].strftime('%Y-%m-%d'), int(r['확정수량'] or 0), int(r['입고수량'] or 0), round(float(r['unit']), 1),
+              ST.get(r['발주현황'], str(r['발주현황'])), int(r['발주번호'])]
+             for _, r in L.fillna({'확정수량': 0, '입고수량': 0}).iterrows()]
+    dl_ts = pa['_ts'].max()
+    po_now = dict(month=str(cm), cut=po_cut.strftime('%Y-%m-%d'), dl=f"{dl_ts[:4]}-{dl_ts[4:6]}-{dl_ts[6:8]} {dl_ts[8:10]}:{dl_ts[10:12]}", lines=lines)
+    _c = sum(l[2] * l[4] for l in lines); _r = sum(l[3] * l[4] for l in lines if l[1] <= po_now['cut'])
+    print(f'당월 발주·입고({cm}): 발주 {len(lines)}줄 · 확정 {_c/1e8:.2f}억 · {po_cut.date()}까지 입고 {_r/1e8:.2f}억')
+
 out = dict(opsOffset=ops_off, days=days, asOf=end, generated=datetime.now(timezone(timedelta(hours=9))).strftime('%Y-%m-%d %H:%M'),
            files=dict(sales=[os.path.basename(f) for f in sfiles], ops=[os.path.basename(f) for f in ofiles],
                       po=[os.path.basename(f) for f in pfiles]),
-           missingOps=missing_ops, opsStart=ops_start, skus=skus, poOnly=po_only, hist=hist, poFc=po_fc)
+           missingOps=missing_ops, opsStart=ops_start, skus=skus, poOnly=po_only, hist=hist, poFc=po_fc, poNow=po_now)
 import gzip, base64
 def _clean(x):
     # NaN/Infinity 는 브라우저 JSON.parse 가 못 읽어서 대시보드 전체가 안 열림 → null 로 바꿈

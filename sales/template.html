@@ -112,6 +112,8 @@ tbody tr.sel td { background: var(--accent-soft); }
 .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--pc, var(--idle)); }
 .neg { color: var(--crit-ink); }
 .wkpis { margin: 12px 0 4px; }
+.pnkpis .kpi { background: var(--bg, var(--surface)); }
+.pnleg i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
 .wchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 10px; }
 .wchips .chip b { margin-left: 4px; }
 .wcause { font-size: 12px; font-weight: 600; white-space: nowrap; }
@@ -466,6 +468,14 @@ table.heat td.l { text-align: left; }
 
   <!-- ========== 재고·발주 ========== -->
   <section class="view" id="view-stock" role="tabpanel" aria-labelledby="tab-stock" hidden>
+    <div class="panel" id="poNowPanel">
+      <div class="ph"><h2 id="pnTitle">당월 발주·입고 현황</h2><span class="note" id="pnNote"></span></div>
+      <div class="kpis pnkpis" id="kpiPoNow"></div>
+      <div class="chart short"><canvas id="cPoNow" aria-label="납품일별 발주·입고 금액"></canvas></div>
+      <div class="stlegend" id="pnLeg"></div>
+      <details class="wfold"><summary><b>납품일 지났는데 덜 들어온 발주</b> <span class="hcount" id="nPnMiss"></span></summary>
+        <div class="tbl-wrap scroll10" style="margin-top:10px"><table id="tPnMiss"></table></div></details>
+    </div>
     <div class="kpis" id="kpiStock"></div>
     <div class="panel">
       <div class="toolbar"><h2>전체 SKU 재고 <span class="hcount" id="nAll"></span></h2><div class="tfilters"><input type="search" id="stockSearch" placeholder="SKU명·ID·세부카테고리 검색" aria-label="전체 SKU 재고 검색"></div></div>
@@ -1742,6 +1752,63 @@ document.addEventListener('click', e => {
 });
 
 
+
+/* ---- 당월 발주·입고 현황 (납품일 = 입고예정일 기준, VAT 제외 = 수량 × 공급가) ---- */
+const SKU_BY_ID = new Map(DATA.skus.map(k => [k.id, k]));
+function renderPoNow() {
+  const P = DATA.poNow, panel = document.getElementById('poNowPanel');
+  if (!P || !P.lines.length) { panel.hidden = true; return; }
+  const filt = state.grp !== '전체' || state.brand !== '전체';
+  const okSku = id => { const k = SKU_BY_ID.get(id); return !filt || (k && grpOk(k) && (state.brand === '전체' || k.brand === state.brand)); };
+  const X = P.lines.filter(l => okSku(l[0])).map(([sid, eta, c, r, u, st, no]) => ({ sid, eta, c, r, st, no, ca: c * u, ra: r * u }));
+  const cut = P.cut, M = +P.month.slice(5), last = daysInMonth(P.month), nb = new Set();
+  const S = f => { let c = 0, r = 0, n = 0; X.forEach(x => { if (f(x)) { c += x.ca; r += x.ra; n++; } }); return { c, r, n }; };
+  const all = S(() => true), td = S(x => x.eta === cut), upto = S(x => x.eta <= cut), past = S(x => x.eta < cut), rest = S(x => x.eta > cut);
+  const miss = X.filter(x => x.eta < cut && x.r < x.c);
+  const tm = P.dl.slice(11), nxt = addDays(cut, 1);
+  document.getElementById('pnTitle').textContent = `${M}월 발주·입고 현황`;
+  document.getElementById('pnNote').innerHTML = `납품일(입고예정일)이 ${M}월인 발주 · 금액은 VAT 제외(수량 × 공급가) · 발주 자료 <b>${md(cut)} ${tm}</b> 기준`;
+  tiles('kpiPoNow', [
+    { lab: `${M}월 총 발주금액`, val: won(all.c), unit: '원', sub: `확정수량 기준 · ${n0(all.n)}건` },
+    { lab: `오늘(${md(cut)}) 납품 발주금액`, val: won(td.c), unit: '원', sub: td.c ? `입고 ${won(td.r)}원 (${tm} 자료 기준)` : '오늘 납품일인 발주 없음' },
+    { lab: `${md(cut)}까지 납품 발주금액`, val: won(upto.c), unit: '원', sub: `납품일 ${M}/1~${md(cut)} · ${n0(upto.n)}건` },
+    { lab: `${md(cut)}까지 입고금액`, val: won(upto.r), unit: '원', sub: `입고율 ${pct(upto.r / upto.c)}${past.c ? ` · 어제까지 납품분 ${pct(past.r / past.c)}` : ''}`, flag: '--good' },
+    { lab: '납품일 지났는데 미입고', val: won(past.c - past.r), unit: '원', sub: `어제까지 납품분 · ${n0(miss.length)}건 (미납·지연)`, flag: '--crit' },
+    { lab: '남은 납품 예정', val: won(rest.c), unit: '원', sub: nxt.slice(0, 7) === P.month ? `${md(nxt)}~${M}/${last} · ${n0(rest.n)}건` : '이번 달 남은 날 없음' }
+  ]);
+  // 납품일별 막대: 입고 / 미입고(지남) / 입고 대기(오늘·남은 날)
+  const days = [...new Set(X.map(x => x.eta))].sort().filter(d => X.some(x => x.eta === d && x.ca > 0));
+  const by = d => S(x => x.eta === d);
+  const D = days.map(d => ({ d, ...by(d) }));
+  const acc = css('--s3'), crit = css('--crit'), wait = css('--s1-soft');
+  const B = baseOpts();
+  mk('cPoNow', {
+    type: 'bar',
+    data: { labels: D.map(x => md(x.d) + (x.d === cut ? ' 오늘' : '')),
+      datasets: [
+        { label: '입고', data: D.map(x => x.r), backgroundColor: acc, stack: 's', maxBarThickness: 40 },
+        { label: '미입고 (납품일 지남)', data: D.map(x => x.d < cut ? x.c - x.r : 0), backgroundColor: crit, stack: 's', maxBarThickness: 40 },
+        { label: '입고 대기', data: D.map(x => x.d >= cut ? x.c - x.r : 0), backgroundColor: wait, stack: 's', maxBarThickness: 40, borderRadius: { topLeft: 3, topRight: 3 }, borderSkipped: false }] },
+    plugins: [barLabels],
+    options: { ...B, layout: { padding: { top: 18 } },
+      plugins: { ...B.plugins, barLabels: { fmt: v => Math.abs(v) >= 1e8 ? (v / 1e8).toFixed(2) + '억' : n0(v / 1e4) + '만' },
+        tooltip: { ...B.plugins.tooltip, mode: 'index', intersect: false, filter: i => i.raw > 0,
+          callbacks: { title: c => `납품일 ${D[c[0].dataIndex].d}`, label: c => ` ${c.dataset.label} ${wonF(c.raw)}`,
+            footer: c => { const x = D[c[0].dataIndex]; return `발주 ${wonF(x.c)} · 입고율 ${pct(x.r / x.c)}`; } } } },
+      scales: { x: { ...B.scales.x, stacked: true }, y: { ...B.scales.y, stacked: true, beginAtZero: true, ticks: { ...B.scales.y.ticks, callback: v => won(v) } } } }
+  });
+  document.getElementById('pnLeg').innerHTML = `<span class="pnleg"><i style="background:${acc}"></i>입고</span><span class="pnleg"><i style="background:${crit}"></i>미입고 (납품일 지남)</span><span class="pnleg"><i style="background:${wait}"></i>입고 대기 (오늘·남은 날)</span><span class="muted">· 막대 위 숫자 = 그날 발주금액</span>`;
+  // 미입고 상세
+  document.getElementById('nPnMiss').textContent = `${miss.length}건 · ${won(past.c - past.r)}원`;
+  const ST = { c: '발주확정', r: '거래명세서 확인요청', v: '거래처 확인요청' };
+  const rows = [...miss].sort((a, b) => (b.ca - b.ra) - (a.ca - a.ra));
+  document.getElementById('tPnMiss').innerHTML = `<thead><tr><th class="l">납품일</th><th class="l">SKU</th><th class="l">발주번호 · 상태</th><th>확정</th><th>입고</th><th>덜 들어온 금액</th></tr></thead><tbody>` +
+    (rows.length ? rows.map(x => { const k = SKU_BY_ID.get(x.sid);
+      return `<tr${k ? ` class="click" data-id="${x.sid}"` : ''}><td class="l">${md(x.eta)}</td>${k ? skuCell(k) : `<td class="l name">${x.sid}</td>`}
+        <td class="l">${x.no}<span class="sub2w">${ST[x.st] || esc(x.st)}</span></td><td>${n0(x.c)}</td><td class="${x.r ? '' : 'neg'}">${n0(x.r)}</td><td class="neg"><b>${wonF(x.ca - x.ra)}</b></td></tr>`; }).join('')
+      : '<tr><td class="l empty" colspan="6">없음</td></tr>') + '</tbody>';
+}
+
 /* ================= 노출·판매 점검 =================
    SKU마다 '평소(직전 4주)' 판매로 최근 N일 기대 판매량을 만들고, 실제가 우연이라고 보기 어려울 만큼 적으면 표시.
    같은 세부카테고리 다른 SKU들의 증감(중간값)을 곱해 시즌 영향은 뺌. 원인은 재고·조회수로 추정. */
@@ -1868,7 +1935,7 @@ function renderAll() {
   document.getElementById('period').innerHTML = state.tab === 'stock' ? `기준일 <b>${ASOF} (${wd(ASOF)})</b> · 재고·발주는 기준일 기준` : state.tab === 'watch' ? `기준일 <b>${ASOF} (${wd(ASOF)})</b> · 기준일까지 최근 ${state.wR}일을 평소와 비교` : `기준일 <b>${ASOF} (${wd(ASOF)})</b> · 선택 기간 ${(d => d.slice(0, 4) === ASOF.slice(0, 4) ? md(d) : `${d.slice(2, 4)}년 ${md(d)}`)(DAYS[state.i0])}~${md(DAYS[state.i1])} (${state.W}일)`;
   const L = list();
   if (state.tab === 'sales') renderSales(L);
-  if (state.tab === 'stock') renderStock(stockList());
+  if (state.tab === 'stock') { renderPoNow(); renderStock(stockList()); }
   if (state.tab === 'watch') renderWatch(stockList());
   if (state.tab === 'yoy') renderYoy(L);
   if (state.drawer != null) { const k = DATA.skus.find(x => x.id === state.drawer); if (k) renderPanel(k); }
