@@ -119,6 +119,7 @@ tbody tr.sel td { background: var(--accent-soft); }
 .pnhint { margin: 2px 0 0; }
 .pnflow { margin: 4px 0 14px; }
 .pnkpis .kpi .lab { font-size: 13px; font-weight: 600; color: var(--ink); word-break: keep-all; }
+.pnkpis .lab-note { font-weight: 400; color: var(--muted); font-size: 12px; }
 #tPnD tr.tot td { font-weight: 700; color: var(--ink); background: var(--surface); position: sticky; top: 37px; z-index: 1; border-bottom: 1px solid var(--line); }
 #pnDetail { margin-top: 10px; }
 .pnf { margin: 8px 0 4px; }
@@ -1804,7 +1805,7 @@ function renderPoNow() {
   tiles('kpiPoNow', [
     { lab: `${M}월 총 발주 금액`, val: won(all.c), unit: '원', sub: `${M}/1~${last} 입고일 · ${n0(all.n)}건` },
     { lab: `${M}월 예상 입고 금액`, val: won(past.r + fut$), unit: '원', sub: `입고 ${won(past.r)} + 입고 예정 ${won(fut$)}`, flag: '--good' },
-    { lab: '미납 금액', val: won(miss$), unit: '원', sub: `${pR} 입고일 · ${n0(miss.length)}건`, flag: '--crit' }
+    { lab: '미납 금액 <span class="lab-note">(단종 상품 발주 / 단순 재고 부족 미납 등)</span>', val: won(miss$), unit: '원', sub: `${pR} 입고일 · ${n0(miss.length)}건`, flag: '--crit' }
   ]);
   // 칸을 누르면 아래에 내역
   const SETS = [
