@@ -118,7 +118,14 @@ tbody tr.sel td { background: var(--accent-soft); }
 .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--pc, var(--idle)); }
 .neg { color: var(--crit-ink); }
 .wkpis { margin: 12px 0 4px; }
-.pnkpis { grid-template-columns: repeat(5, minmax(0, 1fr)); margin-bottom: 10px; }
+.pnkpis { grid-template-columns: repeat(5, minmax(0, 1fr)); margin-bottom: 6px; }
+.pnkpis .kpi { cursor: pointer; transition: border-color .12s, box-shadow .12s; }
+.pnkpis .kpi:hover { border-color: var(--accent); }
+.pnkpis .kpi.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+.pnhint { margin: 2px 0 0; }
+#tPnD tr.tot td { font-weight: 700; color: var(--ink); background: var(--surface); position: sticky; top: 37px; z-index: 1; border-bottom: 1px solid var(--line); }
+#pnDetail { margin-top: 10px; }
+.pnbar h2 { font-size: 15px; } .pnctl { display: flex; gap: 8px; align-items: center; }
 @media (max-width: 1100px) { .pnkpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .pnkpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .pnleg i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
@@ -482,8 +489,12 @@ table.heat td.l { text-align: left; }
     <div class="panel" id="poNowPanel">
       <div class="ph"><h2 id="pnTitle">당월 발주·입고 현황</h2><span class="note" id="pnNote"></span></div>
       <div class="kpis pnkpis" id="kpiPoNow"></div>
-      <details class="wfold"><summary><b>납품일 지났는데 덜 들어온 발주</b> <span class="hcount" id="nPnMiss"></span></summary>
-        <div class="tbl-wrap scroll10" style="margin-top:10px"><table id="tPnMiss"></table></div></details>
+      <p class="note pnhint" id="pnHint">칸을 누르면 아래에 내역이 나옵니다</p>
+      <div id="pnDetail" hidden>
+        <div class="toolbar pnbar"><h2 id="pnDTitle"></h2>
+          <div class="pnctl"><div class="seg" id="pnView"><button data-v="po">발주별</button><button data-v="sku">SKU별</button></div><button class="chip" id="pnClose">닫기 ✕</button></div></div>
+        <div class="tbl-wrap scroll10"><table id="tPnD"></table></div>
+      </div>
     </div>
     <div class="kpis" id="kpiStock"></div>
     <div class="panel">
@@ -1785,16 +1796,45 @@ function renderPoNow() {
     { lab: '남은 납품 예정 금액', val: won(td.c + rest.c), unit: '원', sub: `납품일 ${md(cut)}~${M}/${last} · ${n0(td.n + rest.n)}건` },
     { lab: '납품일 지났는데 미입고', val: won(past.c - past.r), unit: '원', sub: `납품일 ${upTxt} · ${n0(miss.length)}건 (미납·지연)`, flag: '--crit' }
   ]);
-  // 미입고 상세
-  document.getElementById('nPnMiss').textContent = `${miss.length}건 · ${won(past.c - past.r)}원`;
+  // 칸을 누르면 아래에 내역
+  const SETS = [
+    { t: `${M}월 전체 발주`, f: () => true },
+    { t: `금일 입고일까지 발주 (납품일 ${upTxt})`, f: x => x.eta < cut },
+    { t: `금일 입고일까지 입고 (납품일 ${upTxt}, 입고된 것)`, f: x => x.eta < cut && x.r > 0 },
+    { t: `남은 납품 예정 (납품일 ${md(cut)}~${M}/${last})`, f: x => x.eta >= cut },
+    { t: `납품일 지났는데 미입고 (납품일 ${upTxt})`, f: x => x.eta < cut && x.r < x.c, miss: true }];
+  const cards = [...document.querySelectorAll('#kpiPoNow .kpi')];
+  cards.forEach((c, i) => { c.classList.toggle('on', state.pn === i); c.onclick = () => { state.pn = state.pn === i ? null : i; renderPoNow();
+    if (state.pn != null) requestAnimationFrame(() => document.getElementById('pnDetail').scrollIntoView({ behavior: 'smooth', block: 'nearest' })); }; });
+  const box = document.getElementById('pnDetail'); box.hidden = state.pn == null; document.getElementById('pnHint').hidden = state.pn != null;
+  document.getElementById('pnClose').onclick = () => { state.pn = null; renderPoNow(); };
+  document.querySelectorAll('#pnView button').forEach(b => { b.setAttribute('aria-pressed', b.dataset.v === state.pnV); b.onclick = () => { state.pnV = b.dataset.v; renderPoNow(); }; });
+  if (state.pn == null) return;
+  const D = SETS[state.pn], R = X.filter(D.f), ms = !!D.miss;
   const ST = { c: '발주확정', r: '거래명세서 확인요청', v: '거래처 확인요청' };
-  const rows = [...miss].sort((a, b) => (b.ca - b.ra) - (a.ca - a.ra));
-  document.getElementById('tPnMiss').innerHTML = `<thead><tr><th class="l">납품일</th><th class="l">SKU</th><th class="l">발주번호 · 상태</th><th>확정</th><th>입고</th><th>덜 들어온 금액</th></tr></thead><tbody>` +
-    (rows.length ? rows.map(x => { const k = SKU_BY_ID.get(x.sid);
-      return `<tr${k ? ` class="click" data-id="${x.sid}"` : ''}><td class="l">${md(x.eta)}</td>${k ? skuCell(k) : `<td class="l name">${x.sid}</td>`}
-        <td class="l">${x.no}<span class="sub2w">${ST[x.st] || esc(x.st)}</span></td><td>${n0(x.c)}</td><td class="${x.r ? '' : 'neg'}">${n0(x.r)}</td><td class="neg"><b>${wonF(x.ca - x.ra)}</b></td></tr>`; }).join('')
-      : '<tr><td class="l empty" colspan="6">없음</td></tr>') + '</tbody>';
+  const tc = sum(R.map(x => x.ca)), tr = sum(R.map(x => x.ra));
+  const skuTd = id => { const k = SKU_BY_ID.get(id); return k ? skuCell(k) : `<td class="l name">${id}</td>`; };
+  let head, body;
+  if (state.pnV === 'sku') {
+    const G = new Map(); R.forEach(x => { const g = G.get(x.sid) || { sid: x.sid, n: 0, c: 0, r: 0, ca: 0, ra: 0, d0: x.eta, d1: x.eta }; g.n++; g.c += x.c; g.r += x.r; g.ca += x.ca; g.ra += x.ra;
+      if (x.eta < g.d0) g.d0 = x.eta; if (x.eta > g.d1) g.d1 = x.eta; G.set(x.sid, g); });
+    const rows = [...G.values()].sort((a, b) => ms ? (b.ca - b.ra) - (a.ca - a.ra) : b.ca - a.ca);
+    document.getElementById('pnDTitle').innerHTML = `${D.t} <span class="hcount">SKU ${n0(rows.length)}개 · 발주 ${n0(R.length)}건</span>`;
+    head = `<th class="l">SKU</th><th>발주 건수</th><th class="l">납품일</th><th>확정 수량</th><th>입고 수량</th><th>발주금액</th><th>입고금액</th>${ms ? '<th>미입고 금액</th>' : '<th>입고율</th>'}`;
+    body = rows.map(g => `<tr${SKU_BY_ID.has(g.sid) ? ` class="click" data-id="${g.sid}"` : ''}>${skuTd(g.sid)}<td>${n0(g.n)}</td><td class="l">${md(g.d0)}${g.d1 !== g.d0 ? '~' + md(g.d1) : ''}</td>
+      <td>${n0(g.c)}</td><td>${n0(g.r)}</td><td>${wonF(g.ca)}</td><td>${wonF(g.ra)}</td>${ms ? `<td class="neg"><b>${wonF(g.ca - g.ra)}</b></td>` : `<td>${g.ca ? pct(g.ra / g.ca, 0) : '–'}</td>`}</tr>`).join('');
+  } else {
+    const rows = [...R].sort((a, b) => ms ? (b.ca - b.ra) - (a.ca - a.ra) : a.eta < b.eta ? -1 : a.eta > b.eta ? 1 : b.ca - a.ca);
+    document.getElementById('pnDTitle').innerHTML = `${D.t} <span class="hcount">${n0(rows.length)}건</span>`;
+    head = `<th class="l">납품일</th><th class="l">SKU</th><th class="l">발주번호 · 상태</th><th>확정 수량</th><th>입고 수량</th><th>발주금액</th><th>입고금액</th>${ms ? '<th>미입고 금액</th>' : ''}`;
+    body = rows.map(x => `<tr${SKU_BY_ID.has(x.sid) ? ` class="click" data-id="${x.sid}"` : ''}><td class="l">${md(x.eta)}</td>${skuTd(x.sid)}
+      <td class="l">${x.no}<span class="sub2w">${ST[x.st] || esc(x.st)}</span></td><td>${n0(x.c)}</td><td class="${x.r < x.c && x.eta < cut ? 'neg' : ''}">${n0(x.r)}</td><td>${wonF(x.ca)}</td><td>${wonF(x.ra)}</td>${ms ? `<td class="neg"><b>${wonF(x.ca - x.ra)}</b></td>` : ''}</tr>`).join('');
+  }
+  const cols = state.pnV === 'sku' ? 8 : (ms ? 8 : 7), lead = state.pnV === 'sku' ? 3 : 3;
+  document.getElementById('tPnD').innerHTML = `<thead><tr>${head}</tr></thead><tbody>${R.length ? `<tr class="tot"><td class="l" colspan="${lead}">합계</td><td>${n0(sum(R.map(x => x.c)))}</td><td>${n0(sum(R.map(x => x.r)))}</td><td>${wonF(tc)}</td><td>${wonF(tr)}</td>${ms ? `<td class="neg"><b>${wonF(tc - tr)}</b></td>` : state.pnV === 'sku' ? `<td>${pct(tr / tc, 0)}</td>` : ''}</tr>` + body : `<tr><td class="l empty" colspan="${cols}">없음</td></tr>`}</tbody>`;
+  fitScroll5();
 }
+state.pn = null; state.pnV = 'po';
 
 /* ================= 노출·판매 점검 =================
    SKU마다 '평소(직전 4주)' 판매로 최근 N일 기대 판매량을 만들고, 실제가 우연이라고 보기 어려울 만큼 적으면 표시.
