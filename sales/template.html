@@ -515,7 +515,6 @@ table.heat td.l { text-align: left; }
     </div>
 
     <h2 class="sec">발주 점검 <span class="note" id="poNote"></span></h2>
-    <div class="panel" id="poFc"></div>
     <div class="kpis four" id="kpiPo"></div>
     <div class="grid2">
       <div class="panel">
@@ -1040,7 +1039,7 @@ function renderSales(L) {
       <span class="ksub">${p.prv ? `${cmpLabel} ${wonFull(p.prv.g)} · ${arrow(p.cur.g - p.prv.g, p.prv.g ? Math.abs((p.cur.g - p.prv.g) / p.prv.g * 100).toFixed(1) + '%' : '')}` : `일평균 ${wonFull(p.cur.g / W)}`}</span></div>`).join('')}</div>
     <div class="kgroup five">${ORDER.map(p => `<div class="kcell kclick" data-grp="${p.key}" title="${p.key ? `아래 전체 SKU를 ${p.key}만 보기` : '아래 전체 SKU를 전체로'}"><span class="ktag">${p.lp}</span><span class="kval">${isFinite(p.ppmC) ? (p.ppmC * 100).toFixed(2) + '%' : '–'}</span>
       <span class="ksub">${p.prv && isFinite(p.ppmP) && isFinite(p.ppmC) ? `${cmpLabel} ${(p.ppmP * 100).toFixed(2)}% · ${arrow(p.ppmC - p.ppmP, Math.abs((p.ppmC - p.ppmP) * 100).toFixed(2) + '%p')}` : (!p.cur.g ? '판매 없음' : !p.prv ? '비교 자료 없음' : '비교 기간 판매 없음')}</span></div>`).join('')}</div>
-    <div class="kgroup five pmcrow">${pmcCell}${poFcCard()}${ivCell}</div>
+    <div class="kgroup five pmcrow">${pmcCell}${ivCell}</div>
     <div class="mk">
       <table class="mkt"><thead><tr><th class="l"></th><th>매출 <small>${cmpLabel} 대비</small></th><th>PPM <small>${cmpLabel} 대비</small></th></tr></thead><tbody>
       ${ORDER.map((p, i) => `<tr class="kclick" data-grp="${p.key}"><th class="l" scope="row">${['총', '커피/차', '음료', '별도 원두', '기타'][i]}</th>
@@ -1049,7 +1048,7 @@ function renderSales(L) {
       </tbody></table>
       <div class="mkrow"><div><span class="ktag">PMC</span><b>${won(pmcC)}</b><small>매출 대비 ${totG ? (pmcC / totG * 100).toFixed(2) + '%' : '–'}</small></div>
         <div class="mkfc" id="ivCardM"><span class="ktag">${md(ASOF)} 센터 재고금액</span><b>${won(IV.v)}</b><small>VAT 제외 · 약 ${isFinite(IV.days) ? Math.round(IV.days) : '–'}일치 ›</small></div>
-        ${(F => F ? `<div class="mkfc" id="fcCardM"><span class="ktag">${F.M}월 마감 예상 매입</span><b>약 ${won(F.T.est)}</b><small>VAT 제외${F.band != null ? ` · ±${eok1(F.band)}` : ''} · 발주 ${pct((F.T.R + F.T.S) / F.T.est, 0)} 진행 ›</small></div>` : '')(poForecast())}</div>
+        </div>
     </div>`;
   document.querySelectorAll('#kpiSales .kclick').forEach(c => c.onclick = () => {
     const g = c.dataset.grp; state.sf.grp = g && g !== state.sf.grp ? g : ''; markGrpCards(); renderSalesTable(list());
