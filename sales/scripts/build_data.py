@@ -348,6 +348,13 @@ po_now = None
 if pa is not None and '확정수량' in pa and '입고수량' in pa:
     cm = po_cut.to_period('M')
     L = pa[pa['em'] == cm].copy()
+    # 최신 발주 파일 기간(발주일) 안인데 최신 파일에서 사라진 발주 = 쿠팡에서 취소·삭제된 발주로 보고 뺌.
+    # 기간 밖으로 밀려난 오래된 발주는 마지막으로 본 값(입고수량)을 그대로 씀.
+    if len(po):
+        keep = set(zip(po['발주번호'].astype('int64'), po['SKU ID'].astype('int64'))); po_min = str(po['발주일'].min())[:10]
+        gone = L['발주일'].astype(str).str[:10].ge(po_min) & ~pd.Series([(int(a), int(b)) in keep for a, b in zip(L['발주번호'], L['SKU ID'])], index=L.index)
+        if gone.any(): print(f'당월 발주·입고: 최신 발주 파일에서 사라진 발주 {int(gone.sum())}줄 제외 (발주번호 {sorted(set(L.loc[gone, "발주번호"].astype(int)))})')
+        L = L[~gone]
     unit = L['공급가'].where(L['공급가'] > 0) if '공급가' in L else pd.Series(float('nan'), index=L.index)
     L['unit'] = unit.fillna(L['매입가'] / 1.1)
     ST = {'발주확정': 'c', '거래명세서확인요청': 'r', '거래처확인요청': 'v'}
