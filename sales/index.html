@@ -125,6 +125,9 @@ tbody tr.sel td { background: var(--accent-soft); }
 .pnhint { margin: 2px 0 0; }
 #tPnD tr.tot td { font-weight: 700; color: var(--ink); background: var(--surface); position: sticky; top: 37px; z-index: 1; border-bottom: 1px solid var(--line); }
 #pnDetail { margin-top: 10px; }
+.pnf { margin: 8px 0 4px; }
+th.asort { cursor: pointer; user-select: none; }
+th.asort:hover { color: var(--ink); }
 .pnbar h2 { font-size: 15px; } .pnctl { display: flex; gap: 8px; align-items: center; }
 @media (max-width: 1100px) { .pnkpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .pnkpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -493,6 +496,9 @@ table.heat td.l { text-align: left; }
       <div id="pnDetail" hidden>
         <div class="toolbar pnbar"><h2 id="pnDTitle"></h2>
           <div class="pnctl"><div class="seg" id="pnView"><button data-v="po">발주별</button><button data-v="sku">SKU별</button></div><button class="chip" id="pnClose">닫기 ✕</button></div></div>
+        <div class="tfilters pnf"><input type="search" id="pnQ" placeholder="SKU명·ID·발주번호 검색" aria-label="내역 검색">
+          <select id="pnDay" aria-label="납품일"></select><select id="pnSt" aria-label="발주 상태"></select><select id="pnRcv" aria-label="입고 여부"></select>
+          <button class="chip" id="pnReset">필터 초기화</button></div>
         <div class="tbl-wrap scroll10"><table id="tPnD"></table></div>
       </div>
     </div>
@@ -1804,13 +1810,29 @@ function renderPoNow() {
     { t: `남은 납품 예정 (납품일 ${md(cut)}~${M}/${last})`, f: x => x.eta >= cut },
     { t: `납품일 지났는데 미입고 (납품일 ${upTxt})`, f: x => x.eta < cut && x.r < x.c, miss: true }];
   const cards = [...document.querySelectorAll('#kpiPoNow .kpi')];
-  cards.forEach((c, i) => { c.classList.toggle('on', state.pn === i); c.onclick = () => { state.pn = state.pn === i ? null : i; renderPoNow();
+  cards.forEach((c, i) => { c.classList.toggle('on', state.pn === i); c.onclick = () => { state.pn = state.pn === i ? null : i; state.pnF = { q: '', day: '', st: '', rcv: '' }; delete AS.tPnD; renderPoNow();
     if (state.pn != null) requestAnimationFrame(() => document.getElementById('pnDetail').scrollIntoView({ behavior: 'smooth', block: 'nearest' })); }; });
   const box = document.getElementById('pnDetail'); box.hidden = state.pn == null; document.getElementById('pnHint').hidden = state.pn != null;
   document.getElementById('pnClose').onclick = () => { state.pn = null; renderPoNow(); };
-  document.querySelectorAll('#pnView button').forEach(b => { b.setAttribute('aria-pressed', b.dataset.v === state.pnV); b.onclick = () => { state.pnV = b.dataset.v; renderPoNow(); }; });
+  document.querySelectorAll('#pnView button').forEach(b => { b.setAttribute('aria-pressed', b.dataset.v === state.pnV); b.onclick = () => { state.pnV = b.dataset.v; delete AS.tPnD; renderPoNow(); }; });
   if (state.pn == null) return;
-  const D = SETS[state.pn], R = X.filter(D.f), ms = !!D.miss;
+  const D = SETS[state.pn], R0 = X.filter(D.f), ms = !!D.miss;
+  const STN = { c: '발주확정', r: '거래명세서 확인요청', v: '거래처 확인요청' };
+  const fsel = (id, all, opts, key) => { const el = document.getElementById(id), v = state.pnF[key];
+    el.innerHTML = `<option value="">${all}</option>` + opts.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('');
+    el.value = opts.some(([k]) => k === v) ? v : ''; state.pnF[key] = el.value;
+    el.onchange = () => { state.pnF[key] = el.value; renderPoNow(); }; };
+  fsel('pnDay', '납품일 전체', [...new Set(R0.map(x => x.eta))].sort().map(d => [d, `${md(d)} (${wd(d)})`]), 'day');
+  fsel('pnSt', '상태 전체', [...new Set(R0.map(x => x.st))].map(k => [k, STN[k] || k]), 'st');
+  fsel('pnRcv', '입고 여부 전체', [['all', '전량 입고'], ['part', '일부 입고'], ['none', '입고 0']], 'rcv');
+  const qi = document.getElementById('pnQ'); if (document.activeElement !== qi) qi.value = state.pnF.q;
+  qi.oninput = () => { state.pnF.q = qi.value.trim(); renderPoNow(); };
+  document.getElementById('pnReset').onclick = () => { state.pnF = { q: '', day: '', st: '', rcv: '' }; qi.value = ''; renderPoNow(); };
+  const q = state.pnF.q.toLowerCase(), F = state.pnF;
+  const R = R0.filter(x => { if (F.day && x.eta !== F.day) return false; if (F.st && x.st !== F.st) return false;
+    if (F.rcv && (F.rcv === 'all' ? x.r < x.c || !x.c : F.rcv === 'part' ? !(x.r > 0 && x.r < x.c) : x.r > 0)) return false;
+    if (q) { const k = SKU_BY_ID.get(x.sid); if (!(String(x.sid).includes(q) || String(x.no).includes(q) || (k && k.name.toLowerCase().includes(q)))) return false; }
+    return true; });
   const ST = { c: '발주확정', r: '거래명세서 확인요청', v: '거래처 확인요청' };
   const tc = sum(R.map(x => x.ca)), tr = sum(R.map(x => x.ra));
   const skuTd = id => { const k = SKU_BY_ID.get(id); return k ? skuCell(k) : `<td class="l name">${id}</td>`; };
@@ -1819,13 +1841,13 @@ function renderPoNow() {
     const G = new Map(); R.forEach(x => { const g = G.get(x.sid) || { sid: x.sid, n: 0, c: 0, r: 0, ca: 0, ra: 0, d0: x.eta, d1: x.eta }; g.n++; g.c += x.c; g.r += x.r; g.ca += x.ca; g.ra += x.ra;
       if (x.eta < g.d0) g.d0 = x.eta; if (x.eta > g.d1) g.d1 = x.eta; G.set(x.sid, g); });
     const rows = [...G.values()].sort((a, b) => ms ? (b.ca - b.ra) - (a.ca - a.ra) : b.ca - a.ca);
-    document.getElementById('pnDTitle').innerHTML = `${D.t} <span class="hcount">SKU ${n0(rows.length)}개 · 발주 ${n0(R.length)}건</span>`;
+    document.getElementById('pnDTitle').innerHTML = `${D.t} <span class="hcount">SKU ${n0(rows.length)}개 · 발주 ${n0(R.length)}건${R.length !== R0.length ? ` (필터 · 전체 ${n0(R0.length)}건)` : ''}</span>`;
     head = `<th class="l">SKU</th><th>발주 건수</th><th class="l">납품일</th><th>확정 수량</th><th>입고 수량</th><th>발주금액</th><th>입고금액</th>${ms ? '<th>미입고 금액</th>' : '<th>입고율</th>'}`;
     body = rows.map(g => `<tr${SKU_BY_ID.has(g.sid) ? ` class="click" data-id="${g.sid}"` : ''}>${skuTd(g.sid)}<td>${n0(g.n)}</td><td class="l">${md(g.d0)}${g.d1 !== g.d0 ? '~' + md(g.d1) : ''}</td>
       <td>${n0(g.c)}</td><td>${n0(g.r)}</td><td>${wonF(g.ca)}</td><td>${wonF(g.ra)}</td>${ms ? `<td class="neg"><b>${wonF(g.ca - g.ra)}</b></td>` : `<td>${g.ca ? pct(g.ra / g.ca, 0) : '–'}</td>`}</tr>`).join('');
   } else {
     const rows = [...R].sort((a, b) => ms ? (b.ca - b.ra) - (a.ca - a.ra) : a.eta < b.eta ? -1 : a.eta > b.eta ? 1 : b.ca - a.ca);
-    document.getElementById('pnDTitle').innerHTML = `${D.t} <span class="hcount">${n0(rows.length)}건</span>`;
+    document.getElementById('pnDTitle').innerHTML = `${D.t} <span class="hcount">${n0(rows.length)}건${R.length !== R0.length ? ` / 전체 ${n0(R0.length)}건` : ''}</span>`;
     head = `<th class="l">납품일</th><th class="l">SKU</th><th class="l">발주번호 · 상태</th><th>확정 수량</th><th>입고 수량</th><th>발주금액</th><th>입고금액</th>${ms ? '<th>미입고 금액</th>' : ''}`;
     body = rows.map(x => `<tr${SKU_BY_ID.has(x.sid) ? ` class="click" data-id="${x.sid}"` : ''}><td class="l">${md(x.eta)}</td>${skuTd(x.sid)}
       <td class="l">${x.no}<span class="sub2w">${ST[x.st] || esc(x.st)}</span></td><td>${n0(x.c)}</td><td class="${x.r < x.c && x.eta < cut ? 'neg' : ''}">${n0(x.r)}</td><td>${wonF(x.ca)}</td><td>${wonF(x.ra)}</td>${ms ? `<td class="neg"><b>${wonF(x.ca - x.ra)}</b></td>` : ''}</tr>`).join('');
@@ -1834,7 +1856,7 @@ function renderPoNow() {
   document.getElementById('tPnD').innerHTML = `<thead><tr>${head}</tr></thead><tbody>${R.length ? `<tr class="tot"><td class="l" colspan="${lead}">합계</td><td>${n0(sum(R.map(x => x.c)))}</td><td>${n0(sum(R.map(x => x.r)))}</td><td>${wonF(tc)}</td><td>${wonF(tr)}</td>${ms ? `<td class="neg"><b>${wonF(tc - tr)}</b></td>` : state.pnV === 'sku' ? `<td>${pct(tr / tc, 0)}</td>` : ''}</tr>` + body : `<tr><td class="l empty" colspan="${cols}">없음</td></tr>`}</tbody>`;
   fitScroll5();
 }
-state.pn = null; state.pnV = 'po';
+state.pn = null; state.pnV = 'po'; state.pnF = { q: '', day: '', st: '', rcv: '' };
 
 /* ================= 노출·판매 점검 =================
    SKU마다 '평소(직전 4주)' 판매로 최근 N일 기대 판매량을 만들고, 실제가 우연이라고 보기 어려울 만큼 적으면 표시.
@@ -1952,6 +1974,57 @@ function renderWatch(L) {
   fitScroll5();
 }
 document.querySelectorAll('#wRange button').forEach(b => b.onclick = () => { state.wR = +b.dataset.r; renderAll(); });
+
+
+/* ---------- 모든 표: 열 제목을 누르면 정렬 (자체 정렬이 없는 표만) ----------
+   숫자(₩·%·억·만·개·일)·날짜(10/27)·글자를 알아서 비교. 합계 행(.tot)·빈 행은 맨 위/제자리 고정. 다시 그려도 정렬 유지. */
+const AS = {};
+const tKey = t => { if (t.id) return t.id; const h = t.closest('[id]'); return (h ? h.id : 'x') + ':' + [...(h || document).querySelectorAll('table')].indexOf(t); };
+function cellVal(td) {
+  if (!td) return null;
+  let s = (td.dataset.v != null ? td.dataset.v : td.textContent).trim();
+  if (!s || s === '–' || s === '-') return null;
+  if (td.dataset.v != null && !isNaN(+s)) return +s;
+  const d = s.match(/^(\d{4}-)?(\d{1,2})[\/-](\d{1,2})(?!\d)/); if (d && !/^\d+\.\d/.test(s)) return +d[2] * 100 + +d[3];
+  const m = s.replace(/^₩/, '').match(/^([+\-−]?)([\d,]*\.?\d+)\s*(억|만)?/);
+  if (m) { let v = parseFloat(m[2].replace(/,/g, '')) * (m[3] === '억' ? 1e8 : m[3] === '만' ? 1e4 : 1); return m[1] && m[1] !== '+' ? -v : v; }
+  if (/^판매없음|^999\+/.test(s)) return 1e9;
+  return s;
+}
+function sortRows(t, i, dir) {
+  const tb = t.tBodies[0]; if (!tb) return;
+  const all = [...tb.rows], fixed = all.filter(r => r.classList.contains('tot') || r.querySelector('td.empty')), body = all.filter(r => !fixed.includes(r));
+  const vals = new Map(body.map(r => [r, cellVal(r.cells[i])]));
+  body.sort((a, b) => { const x = vals.get(a), y = vals.get(b);
+    if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;
+    if (typeof x === 'number' && typeof y === 'number') return dir * (x - y);
+    if (typeof x === 'number') return -1; if (typeof y === 'number') return 1;
+    return dir * String(x).localeCompare(String(y), 'ko'); });
+  fixed.filter(r => r.classList.contains('tot')).concat(body).forEach(r => tb.appendChild(r));
+}
+let asBusy = false;
+function enhanceTables() {
+  asBusy = true;
+  document.querySelectorAll('table').forEach(t => {
+    if (t.classList.contains('mkt') || t.id === 'tDaily' || t.querySelector('th.sortable') || !t.tHead) return;   // tDaily = 날짜가 열인 가로표
+    const hr = t.tHead.rows[t.tHead.rows.length - 1]; if (!hr || [...hr.cells].some(c => c.colSpan > 1)) return;
+    const key = tKey(t);
+    [...hr.cells].forEach((th, i) => {
+      if (!th.textContent.trim()) return;
+      th.classList.add('asort');
+      const st = AS[key]; if (st && st.i === i) th.setAttribute('aria-sort', st.dir < 0 ? 'descending' : 'ascending'); else th.removeAttribute('aria-sort');
+      if (th._as) return; th._as = 1;
+      th.addEventListener('click', () => { const cur = AS[key];
+        const first = (() => { const r = [...(t.tBodies[0] || { rows: [] }).rows].find(r => !r.classList.contains('tot') && !r.querySelector('td.empty')); const v = r && cellVal(r.cells[i]); return typeof v === 'number' ? -1 : 1; })();
+        AS[key] = { i, dir: cur && cur.i === i ? -cur.dir : first }; enhanceTables(); });
+    });
+    const st = AS[key]; if (st && st.i < hr.cells.length) { const sig = t.tBodies[0] && t.tBodies[0].rows.length + ':' + st.i + ':' + st.dir;
+      if (t._asSig !== sig || !t.tBodies[0]._asDone) { sortRows(t, st.i, st.dir); t._asSig = sig; t.tBodies[0]._asDone = 1; } }
+  });
+  asObs.takeRecords(); asBusy = false;
+}
+const asObs = new MutationObserver(() => { if (!asBusy) requestAnimationFrame(enhanceTables); });
+[document.querySelector('main'), document.getElementById('drawer')].filter(Boolean).forEach(el => asObs.observe(el, { childList: true, subtree: true }));
 
 function renderAll() {
   const quick = WINS.some(w => w.quick && w.id === state.win);
