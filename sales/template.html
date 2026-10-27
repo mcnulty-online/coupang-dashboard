@@ -1800,21 +1800,22 @@ function renderPoNow() {
   document.getElementById('pnNote').innerHTML = `입고일 = 쿠팡 입고예정일 · 금액은 VAT 제외 · <b>${md(cut)} ${tm}</b> 발주 자료 기준`;
   const y = addDays(cut, -1), m1 = `${M}/1`, upTxt = y >= P.month + '-01' ? `${m1}~${md(y)}` : '없음';
   const miss$ = past.c - past.r, fut$ = td.c + rest.c, sh = v => all.c ? v / all.c : 0;
+  const pR = y >= P.month + '-01' ? `${M}/1~${+y.slice(8)}` : '-', fR = `${M}/${+cut.slice(8)}~${last}`;
   tiles('kpiPoNow', [
-    { lab: `${M}월 총 발주`, val: won(all.c), unit: '원', sub: `${n0(all.n)}건` },
-    { lab: `${md(y)}까지 발주`, val: won(past.c), unit: '원', sub: `${upTxt} · ${n0(past.n)}건` },
-    { lab: `${md(y)}까지 입고`, val: won(past.r), unit: '원', sub: `입고율 <b>${pct(past.r / past.c)}</b>`, flag: '--good' },
-    { lab: '미입고', val: won(miss$), unit: '원', sub: `${n0(miss.length)}건`, flag: '--crit' },
-    { lab: '입고 예정', val: won(fut$), unit: '원', sub: `${md(cut)}~${M}/${last} · ${n0(td.n + rest.n)}건` }
+    { lab: `${M}월 총 발주 (${M}/1~${last})`, val: won(all.c), unit: '원', sub: `${n0(all.n)}건` },
+    { lab: `${pR} 입고일 발주 금액`, val: won(past.c), unit: '원', sub: `${n0(past.n)}건` },
+    { lab: `${pR} 입고일 입고 금액`, val: won(past.r), unit: '원', sub: `입고율 <b>${pct(past.r / past.c)}</b>`, flag: '--good' },
+    { lab: `${fR} 입고 예정 발주 금액`, val: won(fut$), unit: '원', sub: `${n0(td.n + rest.n)}건` },
+    { lab: `${pR} 미납 금액`, val: won(miss$), unit: '원', sub: `${n0(miss.length)}건`, flag: '--crit' }
   ]);
   // 칸을 누르면 아래에 내역
   const SETS = [
-    { t: `${M}월 총 발주`, f: () => true },
-    { t: `${md(y)}까지 발주 (${upTxt})`, f: x => x.eta < cut },
-    { t: `${md(y)}까지 입고 (${upTxt})`, f: x => x.eta < cut && x.r > 0 },
-    { t: `입고 예정 (${md(cut)}~${M}/${last})`, f: x => x.eta >= cut },
-    { t: `미입고 (${upTxt})`, f: x => x.eta < cut && x.r < x.c, miss: true }];
-  const TSET = [0, 1, 2, 4, 3];   // 칸 순서 → 내역 종류
+    { t: `${M}월 총 발주 (${M}/1~${last})`, f: () => true },
+    { t: `${pR} 입고일 발주`, f: x => x.eta < cut },
+    { t: `${pR} 입고일 입고`, f: x => x.eta < cut && x.r > 0 },
+    { t: `${fR} 입고 예정 발주`, f: x => x.eta >= cut },
+    { t: `${pR} 미납`, f: x => x.eta < cut && x.r < x.c, miss: true }];
+  const TSET = [0, 1, 2, 3, 4];   // 칸 순서 → 내역 종류
   const cards = [...document.querySelectorAll('#kpiPoNow .kpi')];
   cards.forEach((c, ci) => { const i = TSET[ci]; c.classList.toggle('on', state.pn === i); c.onclick = () => { state.pn = state.pn === i ? null : i; state.pnF = { q: '', day: '', st: '', rcv: '' }; delete AS.tPnD; renderPoNow();
     if (state.pn != null) requestAnimationFrame(() => document.getElementById('pnDetail').scrollIntoView({ behavior: 'smooth', block: 'nearest' })); }; });
