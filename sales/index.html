@@ -1808,16 +1808,16 @@ function renderPoNow() {
   const y = addDays(cut, -1), m1 = `${M}/1`, upTxt = y >= P.month + '-01' ? `${m1}~${md(y)}` : '없음';
   tiles('kpiPoNow', [
     { lab: `${M}월 총 발주금액`, val: won(all.c), unit: '원', sub: `납품일 ${m1}~${M}/${last} · ${n0(all.n)}건` },
-    { lab: `금일 입고일까지 발주금액`, val: won(past.c), unit: '원', sub: `납품일 ${upTxt} · ${n0(past.n)}건` },
-    { lab: `금일 입고일까지 입고금액`, val: won(past.r), unit: '원', sub: `납품일 ${upTxt} · 입고율 ${pct(past.r / past.c)}`, flag: '--good' },
+    { lab: `${md(y)} 입고일까지 발주금액`, val: won(past.c), unit: '원', sub: `납품일 ${upTxt} · ${n0(past.n)}건` },
+    { lab: `${md(y)} 입고일까지 입고금액`, val: won(past.r), unit: '원', sub: `납품일 ${upTxt} · 입고율 ${pct(past.r / past.c)}`, flag: '--good' },
     { lab: '남은 납품 예정 금액', val: won(td.c + rest.c), unit: '원', sub: `납품일 ${md(cut)}~${M}/${last} · ${n0(td.n + rest.n)}건` },
     { lab: '납품일 지났는데 미입고', val: won(past.c - past.r), unit: '원', sub: `납품일 ${upTxt} · ${n0(miss.length)}건 (미납·지연)`, flag: '--crit' }
   ]);
   // 칸을 누르면 아래에 내역
   const SETS = [
     { t: `${M}월 전체 발주`, f: () => true },
-    { t: `금일 입고일까지 발주 (납품일 ${upTxt})`, f: x => x.eta < cut },
-    { t: `금일 입고일까지 입고 (납품일 ${upTxt}, 입고된 것)`, f: x => x.eta < cut && x.r > 0 },
+    { t: `${md(y)} 입고일까지 발주 (납품일 ${upTxt})`, f: x => x.eta < cut },
+    { t: `${md(y)} 입고일까지 입고 (납품일 ${upTxt}, 입고된 것)`, f: x => x.eta < cut && x.r > 0 },
     { t: `남은 납품 예정 (납품일 ${md(cut)}~${M}/${last})`, f: x => x.eta >= cut },
     { t: `납품일 지났는데 미입고 (납품일 ${upTxt})`, f: x => x.eta < cut && x.r < x.c, miss: true }];
   const cards = [...document.querySelectorAll('#kpiPoNow .kpi')];
