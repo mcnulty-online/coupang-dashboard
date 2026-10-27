@@ -1849,13 +1849,13 @@ function renderPoNow() {
       if (x.eta < g.d0) g.d0 = x.eta; if (x.eta > g.d1) g.d1 = x.eta; G.set(x.sid, g); });
     const rows = [...G.values()].sort((a, b) => ms ? (b.ca - b.ra) - (a.ca - a.ra) : b.ca - a.ca);
     document.getElementById('pnDTitle').innerHTML = `${D.t} <span class="hcount">SKU ${n0(rows.length)}개 · 발주 ${n0(R.length)}건${R.length !== R0.length ? ` (필터 · 전체 ${n0(R0.length)}건)` : ''}</span>`;
-    head = `<th class="l">SKU</th><th>발주 건수</th><th class="l">입고일</th><th>확정 수량</th><th>입고 수량</th><th>발주금액</th><th>입고금액</th>${ms ? '<th>안 들어온 금액</th>' : '<th>입고율</th>'}`;
+    head = `<th class="l">SKU</th><th>발주 건수</th><th class="l">입고일</th><th>확정 수량</th><th>입고 수량</th><th>발주금액</th><th>입고금액</th>${ms ? '<th>미납 금액</th>' : '<th>입고율</th>'}`;
     body = rows.map(g => `<tr${SKU_BY_ID.has(g.sid) ? ` class="click" data-id="${g.sid}"` : ''}>${skuTd(g.sid)}<td>${n0(g.n)}</td><td class="l">${md(g.d0)}${g.d1 !== g.d0 ? '~' + md(g.d1) : ''}</td>
       <td>${n0(g.c)}</td><td>${n0(g.r)}</td><td>${wonF(g.ca)}</td><td>${wonF(g.ra)}</td>${ms ? `<td class="neg"><b>${wonF(g.ca - g.ra)}</b></td>` : `<td>${g.ca ? pct(g.ra / g.ca, 0) : '–'}</td>`}</tr>`).join('');
   } else {
     const rows = [...R].sort((a, b) => ms ? (b.ca - b.ra) - (a.ca - a.ra) : a.eta < b.eta ? -1 : a.eta > b.eta ? 1 : b.ca - a.ca);
     document.getElementById('pnDTitle').innerHTML = `${D.t} <span class="hcount">${n0(rows.length)}건${R.length !== R0.length ? ` / 전체 ${n0(R0.length)}건` : ''}</span>`;
-    head = `<th class="l">입고일</th><th class="l">SKU</th><th class="l">발주번호 · 상태</th><th>확정 수량</th><th>입고 수량</th><th>발주금액</th><th>입고금액</th>${ms ? '<th>안 들어온 금액</th>' : ''}`;
+    head = `<th class="l">입고일</th><th class="l">SKU</th><th class="l">발주번호 · 상태</th><th>확정 수량</th><th>입고 수량</th><th>발주금액</th><th>입고금액</th>${ms ? '<th>미납 금액</th>' : ''}`;
     body = rows.map(x => `<tr${SKU_BY_ID.has(x.sid) ? ` class="click" data-id="${x.sid}"` : ''}><td class="l">${md(x.eta)}</td>${skuTd(x.sid)}
       <td class="l">${x.no}<span class="sub2w">${ST[x.st] || esc(x.st)}</span></td><td>${n0(x.c)}</td><td class="${x.r < x.c && x.eta < cut ? 'neg' : ''}">${n0(x.r)}</td><td>${wonF(x.ca)}</td><td>${wonF(x.ra)}</td>${ms ? `<td class="neg"><b>${wonF(x.ca - x.ra)}</b></td>` : ''}</tr>`).join('');
   }
