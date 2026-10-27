@@ -366,6 +366,8 @@ h2.sec .note { font-weight: 400; }
 .fc-back[open] summary { margin-bottom: 8px; }
 .kgroup.pmcrow .fccard { grid-column: span 2; cursor: pointer; }
 .kgroup.pmcrow .fccard:hover { border-color: var(--accent) !important; }
+.kgroup.pmcrow .ivcard { grid-column: span 2; cursor: pointer; }
+.kgroup.pmcrow .ivcard:hover { border-color: var(--accent) !important; }
 .fccard .fclink { color: var(--accent); font-weight: 600; margin-left: 4px; white-space: nowrap; }
 .dtable.po thead tr.potot th { color: var(--ink); font-weight: 700; font-size: 12px; background: var(--accent-soft); border-bottom: 1px solid var(--line); }
 .dtable.po tr.done td { color: var(--muted); }
@@ -998,7 +1000,7 @@ const SCOLS2 = [
   { key: null, lab: '#', l: true }, { key: null, lab: 'SKU', l: true },
   { key: 'G', lab: '매출' }, { key: 'Q', lab: '판매수량' }, { key: 'avgQ', lab: '일평균<br>판매수량' },
   { key: 'ppm', lab: 'PPM' }, { key: 'PMC', lab: 'PMC' },
-  { key: 'stock', lab: '재고', sub: '기준일' }, { key: 'doc', lab: '재고일수', sub: '현재' },
+  { key: 'stock', lab: '재고', sub: '기준일' }, { key: 'stockVal', lab: '재고금액', sub: 'VAT 제외' }, { key: 'doc', lab: '재고일수', sub: '현재' },
   { key: 'pend', lab: '입고 예정', sub: '수량 · 첫 입고' }, { key: 'docPOs', lab: '입고 후', sub: '재고일수' }
 ];
 function renderSales(L) {
@@ -1034,12 +1036,20 @@ function renderSales(L) {
   const totG = parts[0].cur.g, d = pmcP != null ? pmcC - pmcP : NaN;
   const pmcCell = `<div class="kcell"><span class="ktag">PMC</span><span class="kval">${wonFull(pmcC)}</span>
       <span class="ksub">${pmcP != null ? `${cmpLabel} ${wonFull(pmcP)} · <b class="neutral">${isFinite(d) ? (d < 0 ? '▼' : '▲') + (pmcP ? Math.abs(d / pmcP * 100).toFixed(1) + '%' : '') : ''}</b>` : ''}<span class="pmcr">매출 대비 ${totG ? (pmcC / totG * 100).toFixed(2) + '%' : '–'}</span></span></div>`;
+  // 기준일 쿠팡 센터 재고금액 (재고 × 매입원가, VAT 제외) — 기간 선택과 무관, 브랜드 필터만
+  const IV = (() => { const S = LB.filter(k => k.inOps && k.unitCost); const at = (f, i) => sum(S.map(k => (k[f][i] || 0) * k.unitCost));
+    const v = at('st', N - 1), pv = at('st', N - 2), cd = sum(LB.map(k => sum(k.c.slice(-AVG_DAYS)))) / AVG_DAYS;
+    return { v, pv, q: sum(S.map(k => k.st[N - 1] || 0)), fc: at('sFC', N - 1), rc: at('sRC', N - 1), etc: at('sETC', N - 1), days: cd ? v / cd : NaN }; })();
+  const ivCell = `<div class="kcell ivcard" id="ivCard" title="재고·발주 탭에서 자세히 보기"><span class="ktag">${md(ASOF)} 쿠팡 센터 재고금액 · 매입원가 · VAT 제외</span>
+      <span class="kval">${wonFull(IV.v)}</span>
+      <span class="ksub">전일 ${wonFull(IV.pv)} · <b class="neutral">${IV.pv ? (IV.v < IV.pv ? '▼' : '▲') + Math.abs((IV.v - IV.pv) / IV.pv * 100).toFixed(1) + '%' : ''}</b>
+        <span class="pmcr">재고 ${n0(IV.q)}개 · 약 ${isFinite(IV.days) ? Math.round(IV.days) : '–'}일치 · FC ${won(IV.fc)} · RC ${won(IV.rc)}${IV.etc > 0 ? ` · 기타 ${won(IV.etc)}` : ''} <span class="fclink">자세히 ›</span></span></span></div>`;
   document.getElementById('kpiSales').innerHTML = `
     <div class="kgroup five">${ORDER.map(p => `<div class="kcell kclick" data-grp="${p.key}" title="${p.key ? `아래 전체 SKU를 ${p.key}만 보기` : '아래 전체 SKU를 전체로'}"><span class="ktag">${p.lg}</span><span class="kval">${wonFull(p.cur.g)}</span>
       <span class="ksub">${p.prv ? `${cmpLabel} ${wonFull(p.prv.g)} · ${arrow(p.cur.g - p.prv.g, p.prv.g ? Math.abs((p.cur.g - p.prv.g) / p.prv.g * 100).toFixed(1) + '%' : '')}` : `일평균 ${wonFull(p.cur.g / W)}`}</span></div>`).join('')}</div>
     <div class="kgroup five">${ORDER.map(p => `<div class="kcell kclick" data-grp="${p.key}" title="${p.key ? `아래 전체 SKU를 ${p.key}만 보기` : '아래 전체 SKU를 전체로'}"><span class="ktag">${p.lp}</span><span class="kval">${isFinite(p.ppmC) ? (p.ppmC * 100).toFixed(2) + '%' : '–'}</span>
       <span class="ksub">${p.prv && isFinite(p.ppmP) && isFinite(p.ppmC) ? `${cmpLabel} ${(p.ppmP * 100).toFixed(2)}% · ${arrow(p.ppmC - p.ppmP, Math.abs((p.ppmC - p.ppmP) * 100).toFixed(2) + '%p')}` : (!p.cur.g ? '판매 없음' : !p.prv ? '비교 자료 없음' : '비교 기간 판매 없음')}</span></div>`).join('')}</div>
-    <div class="kgroup five pmcrow">${pmcCell}${poFcCard()}</div>
+    <div class="kgroup five pmcrow">${pmcCell}${poFcCard()}${ivCell}</div>
     <div class="mk">
       <table class="mkt"><thead><tr><th class="l"></th><th>매출 <small>${cmpLabel} 대비</small></th><th>PPM <small>${cmpLabel} 대비</small></th></tr></thead><tbody>
       ${ORDER.map((p, i) => `<tr class="kclick" data-grp="${p.key}"><th class="l" scope="row">${['총', '커피/차', '음료', '별도 원두', '기타'][i]}</th>
@@ -1047,6 +1057,7 @@ function renderSales(L) {
         <td><b>${isFinite(p.ppmC) ? (p.ppmC * 100).toFixed(1) + '%' : '–'}</b><small>${p.prv && isFinite(p.ppmP) && isFinite(p.ppmC) ? arrow(p.ppmC - p.ppmP, Math.abs((p.ppmC - p.ppmP) * 100).toFixed(1) + '%p') : ''}</small></td></tr>`).join('')}
       </tbody></table>
       <div class="mkrow"><div><span class="ktag">PMC</span><b>${won(pmcC)}</b><small>매출 대비 ${totG ? (pmcC / totG * 100).toFixed(2) + '%' : '–'}</small></div>
+        <div class="mkfc" id="ivCardM"><span class="ktag">${md(ASOF)} 센터 재고금액</span><b>${won(IV.v)}</b><small>VAT 제외 · 약 ${isFinite(IV.days) ? Math.round(IV.days) : '–'}일치 ›</small></div>
         ${(F => F ? `<div class="mkfc" id="fcCardM"><span class="ktag">${F.M}월 마감 예상 매입</span><b>약 ${won(F.T.est)}</b><small>VAT 제외${F.band != null ? ` · ±${eok1(F.band)}` : ''} · 발주 ${pct((F.T.R + F.T.S) / F.T.est, 0)} 진행 ›</small></div>` : '')(poForecast())}</div>
     </div>`;
   document.querySelectorAll('#kpiSales .kclick').forEach(c => c.onclick = () => {
@@ -1056,6 +1067,7 @@ function renderSales(L) {
   const fccM = document.getElementById('fcCardM');
   if (fccM) fccM.onclick = () => { setTab('stock', true); requestAnimationFrame(() => document.getElementById('poFc').scrollIntoView({ behavior: 'smooth', block: 'start' })); };
   const fcc = document.getElementById('fcCard');
+  ['ivCard', 'ivCardM'].forEach(id => { const el = document.getElementById(id); if (el) el.onclick = () => { setTab('stock', true); requestAnimationFrame(() => document.getElementById('kpiStock').scrollIntoView({ behavior: 'smooth', block: 'start' })); }; });
   if (fcc) fcc.onclick = () => { setTab('stock', true); requestAnimationFrame(() => document.getElementById('poFc').scrollIntoView({ behavior: 'smooth', block: 'start' })); };
 
   // ---- 매출 그래프: 45일 이하는 일별, 그보다 길면 월별. 1일은 최근 14일 중 그날 강조 ----
@@ -1130,7 +1142,7 @@ function initSalesFilters() {
   document.getElementById('sfReset').onclick = () => { state.sf = { q: '', cat: '', st: '', po: '', sale: '', grp: '' }; markGrpCards();
     ['sfQ', 'sfCat', 'sfSt', 'sfPo', 'sfSale'].forEach(id => document.getElementById(id).value = ''); renderSalesTable(list()); };
 }
-const STOCK_KEYS = ['stock', 'doc', 'pend', 'docPOs'];
+const STOCK_KEYS = ['stock', 'stockVal', 'doc', 'pend', 'docPOs'];
 function markGrpCards() {
   document.querySelectorAll('#kpiSales .kclick').forEach(c => c.classList.toggle('kon', !!state.sf.grp && c.dataset.grp === state.sf.grp));
 }
@@ -1153,7 +1165,7 @@ function renderSalesTable(L) {
       <td><b>${won(k.G)}</b></td>
       <td>${n0(k.Q)}</td><td>${n0(k.avgQ)}</td>
       <td class="${k.ppm < 0 ? 'neg' : ''}">${pct(k.ppm)}</td><td>${k.PMC ? won(k.PMC) : '–'}</td>
-      ${showStock ? `<td>${k.stock == null ? '–' : n0(k.stock)}</td><td>${pill(k.bucket, docTxt(k.doc))}</td><td>${etaTxt(k)}</td>
+      ${showStock ? `<td>${k.stock == null ? '–' : n0(k.stock)}</td><td>${k.stockVal != null ? won(k.stockVal) : '–'}</td><td>${pill(k.bucket, docTxt(k.doc))}</td><td>${etaTxt(k)}</td>
       <td>${k.pend ? pill(k.bucketPO, docTxt(k.docPO)) : '<span class="muted">–</span>'}</td>` : ''}</tr>`).join('')
     : `<tr><td class="l empty" colspan="${COLS.length}">조건에 맞는 SKU가 없습니다.</td></tr>`) + '</tbody>';
   t.querySelectorAll('th.sortable').forEach(th => th.onclick = () => {
