@@ -112,14 +112,15 @@ tbody tr.sel td { background: var(--accent-soft); }
 .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--pc, var(--idle)); }
 .neg { color: var(--crit-ink); }
 .wkpis { margin: 12px 0 4px; }
-.pnkpis { grid-template-columns: 1fr 1fr 1.5fr 1fr; margin-bottom: 6px; }
+.pnkpis { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 6px; }
 .pnkpis .kpi { cursor: pointer; transition: border-color .12s, box-shadow .12s; }
 .pnkpis .kpi:hover { border-color: var(--accent); }
 .pnkpis .kpi.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
 .pnhint { margin: 2px 0 0; }
 .pnflow { margin: 4px 0 14px; }
 .pnkpis .kpi .lab { font-size: 13px; font-weight: 600; color: var(--ink); word-break: keep-all; }
-.pnkpis .lab-note { font-weight: 400; color: var(--muted); font-size: 12px; }
+.pnkpis .lab-note { display: block; font-weight: 400; color: var(--muted); font-size: 12px; margin-top: 2px; }
+@media (min-width: 1101px) { .pnkpis .kpi .lab { min-height: 38px; } }
 #tPnD tr.tot td { font-weight: 700; color: var(--ink); background: var(--surface); position: sticky; top: 37px; z-index: 1; border-bottom: 1px solid var(--line); }
 #pnDetail { margin-top: 10px; }
 .pnf { margin: 8px 0 4px; }
