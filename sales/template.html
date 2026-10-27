@@ -117,6 +117,16 @@ tbody tr.sel td { background: var(--accent-soft); }
 .pnkpis .kpi:hover { border-color: var(--accent); }
 .pnkpis .kpi.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
 .pnhint { margin: 2px 0 0; }
+.pnflow { margin: 4px 0 14px; }
+.pnflow .pnsum { font-size: 14px; color: var(--ink-2); margin-bottom: 8px; line-height: 1.6; }
+.pnflow .pnsum b { color: var(--ink); }
+.pnbarw { display: flex; height: 30px; border-radius: 8px; overflow: hidden; background: var(--grid); }
+.pnbarw > div { display: flex; align-items: center; justify-content: center; min-width: 0; font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; cursor: pointer; }
+.pnbarw > div:hover { filter: brightness(0.95); }
+.pnbarw .g { background: var(--good); color: #fff; } .pnbarw .c { background: var(--crit); color: #fff; } .pnbarw .w { background: var(--s1-soft); color: var(--ink); }
+.pnaxis { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 4px; }
+@media (max-width: 700px) { .pnaxis span:nth-child(2) { display: none; } .pnflow .pnsum { font-size: 13px; } }
+.pnkpis .kpi .lab { font-size: 13px; font-weight: 600; color: var(--ink); }
 #tPnD tr.tot td { font-weight: 700; color: var(--ink); background: var(--surface); position: sticky; top: 37px; z-index: 1; border-bottom: 1px solid var(--line); }
 #pnDetail { margin-top: 10px; }
 .pnf { margin: 8px 0 4px; }
@@ -484,13 +494,14 @@ table.heat td.l { text-align: left; }
   <section class="view" id="view-stock" role="tabpanel" aria-labelledby="tab-stock" hidden>
     <div class="panel" id="poNowPanel">
       <div class="ph"><h2 id="pnTitle">당월 발주·입고 현황</h2><span class="note" id="pnNote"></span></div>
+      <div class="pnflow" id="pnFlow"></div>
       <div class="kpis pnkpis" id="kpiPoNow"></div>
-      <p class="note pnhint" id="pnHint">칸을 누르면 아래에 내역이 나옵니다</p>
+      <p class="note pnhint" id="pnHint">막대나 칸을 누르면 아래에 발주 내역이 나와요</p>
       <div id="pnDetail" hidden>
         <div class="toolbar pnbar"><h2 id="pnDTitle"></h2>
           <div class="pnctl"><div class="seg" id="pnView"><button data-v="po">발주별</button><button data-v="sku">SKU별</button></div><button class="chip" id="pnClose">닫기 ✕</button></div></div>
         <div class="tfilters pnf"><input type="search" id="pnQ" placeholder="SKU명·ID·발주번호 검색" aria-label="내역 검색">
-          <select id="pnDay" aria-label="납품일"></select><select id="pnSt" aria-label="발주 상태"></select><select id="pnRcv" aria-label="입고 여부"></select>
+          <select id="pnDay" aria-label="입고일"></select><select id="pnSt" aria-label="발주 상태"></select><select id="pnRcv" aria-label="입고 여부"></select>
           <button class="chip" id="pnReset">필터 초기화</button></div>
         <div class="tbl-wrap scroll10"><table id="tPnD"></table></div>
       </div>
@@ -1795,24 +1806,39 @@ function renderPoNow() {
   const miss = X.filter(x => x.eta < cut && x.r < x.c);
   const tm = P.dl.slice(11), nxt = addDays(cut, 1);
   document.getElementById('pnTitle').textContent = `${M}월 발주·입고 현황`;
-  document.getElementById('pnNote').innerHTML = `납품일(입고예정일)이 ${M}월인 발주 · 금액은 VAT 제외(수량 × 공급가) · 발주 자료 <b>${md(cut)} ${tm}</b> 기준`;
+  document.getElementById('pnNote').innerHTML = `입고일 = 쿠팡 입고예정일 · 금액은 VAT 제외 · <b>${md(cut)} ${tm}</b> 발주 자료 기준`;
   const y = addDays(cut, -1), m1 = `${M}/1`, upTxt = y >= P.month + '-01' ? `${m1}~${md(y)}` : '없음';
+  const miss$ = past.c - past.r, fut$ = td.c + rest.c, sh = v => all.c ? v / all.c : 0;
+  // 한 줄 요약 + 막대 (들어온 것 / 안 들어온 것 / 앞으로 들어올 것)
+  document.getElementById('pnFlow').innerHTML = `
+    <div class="pnsum">${M}월에 들어올 발주 <b>${won(all.c)}원</b> 중 <b style="color:var(--good-ink)">${won(past.r)}원은 들어왔고</b>,
+      <b style="color:var(--crit-ink)">${won(miss$)}원은 입고일이 지났는데 아직 안 들어왔어요</b>. 남은 <b>${won(fut$)}원</b>은 ${md(cut)}~${M}/${last}에 들어올 예정이에요.</div>
+    <div class="pnbarw">
+      <div class="g" data-set="2" style="width:${sh(past.r) * 100}%" title="들어온 금액 ${wonF(past.r)}">${sh(past.r) > 0.12 ? `들어옴 ${won(past.r)} · ${pct(sh(past.r), 0)}` : ''}</div>
+      <div class="c" data-set="4" style="width:${sh(miss$) * 100}%" title="안 들어온 금액 ${wonF(miss$)}">${sh(miss$) > 0.12 ? `안 들어옴 ${won(miss$)}` : ''}</div>
+      <div class="w" data-set="3" style="width:${sh(fut$) * 100}%" title="앞으로 들어올 금액 ${wonF(fut$)}">${sh(fut$) > 0.12 ? `들어올 예정 ${won(fut$)} · ${pct(sh(fut$), 0)}` : ''}</div>
+    </div>
+    <div class="pnaxis"><span>${M}/1</span><span>← ${md(y)}까지 입고일 지난 발주 ${won(past.c)} | ${md(cut)}부터 입고 예정 ${won(fut$)} →</span><span>${M}/${last}</span></div>`;
   tiles('kpiPoNow', [
-    { lab: `${M}월 총 발주금액`, val: won(all.c), unit: '원', sub: `납품일 ${m1}~${M}/${last} · ${n0(all.n)}건` },
-    { lab: `${md(y)} 입고일까지 발주금액`, val: won(past.c), unit: '원', sub: `납품일 ${upTxt} · ${n0(past.n)}건` },
-    { lab: `${md(y)} 입고일까지 입고금액`, val: won(past.r), unit: '원', sub: `납품일 ${upTxt} · 입고율 ${pct(past.r / past.c)}`, flag: '--good' },
-    { lab: '남은 납품 예정 금액', val: won(td.c + rest.c), unit: '원', sub: `납품일 ${md(cut)}~${M}/${last} · ${n0(td.n + rest.n)}건` },
-    { lab: '납품일 지났는데 미입고', val: won(past.c - past.r), unit: '원', sub: `납품일 ${upTxt} · ${n0(miss.length)}건 (미납·지연)`, flag: '--crit' }
+    { lab: `${M}월 전체 발주`, val: won(all.c), unit: '원', sub: `${m1}~${M}/${last} 입고 예정인 발주 전부 · ${n0(all.n)}건` },
+    { lab: `${md(y)}까지 들어와야 할 금액`, val: won(past.c), unit: '원', sub: `입고일이 ${upTxt}인 발주 · ${n0(past.n)}건` },
+    { lab: `${md(y)}까지 실제 들어온 금액`, val: won(past.r), unit: '원', sub: `들어와야 할 금액의 <b>${pct(past.r / past.c)}</b>`, flag: '--good' },
+    { lab: '아직 안 들어온 금액', val: won(miss$), unit: '원', sub: `입고일 지났는데 미입고 · ${n0(miss.length)}건`, flag: '--crit' },
+    { lab: '앞으로 들어올 금액', val: won(fut$), unit: '원', sub: `${md(cut)}~${M}/${last} 입고 예정 · ${n0(td.n + rest.n)}건` }
   ]);
   // 칸을 누르면 아래에 내역
   const SETS = [
     { t: `${M}월 전체 발주`, f: () => true },
-    { t: `${md(y)} 입고일까지 발주 (납품일 ${upTxt})`, f: x => x.eta < cut },
-    { t: `${md(y)} 입고일까지 입고 (납품일 ${upTxt}, 입고된 것)`, f: x => x.eta < cut && x.r > 0 },
-    { t: `남은 납품 예정 (납품일 ${md(cut)}~${M}/${last})`, f: x => x.eta >= cut },
-    { t: `납품일 지났는데 미입고 (납품일 ${upTxt})`, f: x => x.eta < cut && x.r < x.c, miss: true }];
+    { t: `${md(y)}까지 들어와야 할 발주 (입고일 ${upTxt})`, f: x => x.eta < cut },
+    { t: `${md(y)}까지 실제 들어온 발주 (입고일 ${upTxt})`, f: x => x.eta < cut && x.r > 0 },
+    { t: `앞으로 들어올 발주 (입고일 ${md(cut)}~${M}/${last})`, f: x => x.eta >= cut },
+    { t: `아직 안 들어온 발주 (입고일 ${upTxt}, 지났는데 미입고)`, f: x => x.eta < cut && x.r < x.c, miss: true }];
+  const TSET = [0, 1, 2, 4, 3];   // 칸 순서 → 내역 종류
+  const pick = i => { state.pn = state.pn === i ? null : i; state.pnF = { q: '', day: '', st: '', rcv: '' }; delete AS.tPnD; renderPoNow();
+    if (state.pn != null) requestAnimationFrame(() => document.getElementById('pnDetail').scrollIntoView({ behavior: 'smooth', block: 'nearest' })); };
+  document.querySelectorAll('#pnFlow [data-set]').forEach(b => { b.onclick = () => pick(+b.dataset.set); });
   const cards = [...document.querySelectorAll('#kpiPoNow .kpi')];
-  cards.forEach((c, i) => { c.classList.toggle('on', state.pn === i); c.onclick = () => { state.pn = state.pn === i ? null : i; state.pnF = { q: '', day: '', st: '', rcv: '' }; delete AS.tPnD; renderPoNow();
+  cards.forEach((c, ci) => { const i = TSET[ci]; c.classList.toggle('on', state.pn === i); c.onclick = () => { state.pn = state.pn === i ? null : i; state.pnF = { q: '', day: '', st: '', rcv: '' }; delete AS.tPnD; renderPoNow();
     if (state.pn != null) requestAnimationFrame(() => document.getElementById('pnDetail').scrollIntoView({ behavior: 'smooth', block: 'nearest' })); }; });
   const box = document.getElementById('pnDetail'); box.hidden = state.pn == null; document.getElementById('pnHint').hidden = state.pn != null;
   document.getElementById('pnClose').onclick = () => { state.pn = null; renderPoNow(); };
@@ -1824,7 +1850,7 @@ function renderPoNow() {
     el.innerHTML = `<option value="">${all}</option>` + opts.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('');
     el.value = opts.some(([k]) => k === v) ? v : ''; state.pnF[key] = el.value;
     el.onchange = () => { state.pnF[key] = el.value; renderPoNow(); }; };
-  fsel('pnDay', '납품일 전체', [...new Set(R0.map(x => x.eta))].sort().map(d => [d, `${md(d)} (${wd(d)})`]), 'day');
+  fsel('pnDay', '입고일 전체', [...new Set(R0.map(x => x.eta))].sort().map(d => [d, `${md(d)} (${wd(d)})`]), 'day');
   fsel('pnSt', '상태 전체', [...new Set(R0.map(x => x.st))].map(k => [k, STN[k] || k]), 'st');
   fsel('pnRcv', '입고 여부 전체', [['all', '전량 입고'], ['part', '일부 입고'], ['none', '입고 0']], 'rcv');
   const qi = document.getElementById('pnQ'); if (document.activeElement !== qi) qi.value = state.pnF.q;
@@ -1844,13 +1870,13 @@ function renderPoNow() {
       if (x.eta < g.d0) g.d0 = x.eta; if (x.eta > g.d1) g.d1 = x.eta; G.set(x.sid, g); });
     const rows = [...G.values()].sort((a, b) => ms ? (b.ca - b.ra) - (a.ca - a.ra) : b.ca - a.ca);
     document.getElementById('pnDTitle').innerHTML = `${D.t} <span class="hcount">SKU ${n0(rows.length)}개 · 발주 ${n0(R.length)}건${R.length !== R0.length ? ` (필터 · 전체 ${n0(R0.length)}건)` : ''}</span>`;
-    head = `<th class="l">SKU</th><th>발주 건수</th><th class="l">납품일</th><th>확정 수량</th><th>입고 수량</th><th>발주금액</th><th>입고금액</th>${ms ? '<th>미입고 금액</th>' : '<th>입고율</th>'}`;
+    head = `<th class="l">SKU</th><th>발주 건수</th><th class="l">입고일</th><th>확정 수량</th><th>입고 수량</th><th>발주금액</th><th>입고금액</th>${ms ? '<th>안 들어온 금액</th>' : '<th>입고율</th>'}`;
     body = rows.map(g => `<tr${SKU_BY_ID.has(g.sid) ? ` class="click" data-id="${g.sid}"` : ''}>${skuTd(g.sid)}<td>${n0(g.n)}</td><td class="l">${md(g.d0)}${g.d1 !== g.d0 ? '~' + md(g.d1) : ''}</td>
       <td>${n0(g.c)}</td><td>${n0(g.r)}</td><td>${wonF(g.ca)}</td><td>${wonF(g.ra)}</td>${ms ? `<td class="neg"><b>${wonF(g.ca - g.ra)}</b></td>` : `<td>${g.ca ? pct(g.ra / g.ca, 0) : '–'}</td>`}</tr>`).join('');
   } else {
     const rows = [...R].sort((a, b) => ms ? (b.ca - b.ra) - (a.ca - a.ra) : a.eta < b.eta ? -1 : a.eta > b.eta ? 1 : b.ca - a.ca);
     document.getElementById('pnDTitle').innerHTML = `${D.t} <span class="hcount">${n0(rows.length)}건${R.length !== R0.length ? ` / 전체 ${n0(R0.length)}건` : ''}</span>`;
-    head = `<th class="l">납품일</th><th class="l">SKU</th><th class="l">발주번호 · 상태</th><th>확정 수량</th><th>입고 수량</th><th>발주금액</th><th>입고금액</th>${ms ? '<th>미입고 금액</th>' : ''}`;
+    head = `<th class="l">입고일</th><th class="l">SKU</th><th class="l">발주번호 · 상태</th><th>확정 수량</th><th>입고 수량</th><th>발주금액</th><th>입고금액</th>${ms ? '<th>안 들어온 금액</th>' : ''}`;
     body = rows.map(x => `<tr${SKU_BY_ID.has(x.sid) ? ` class="click" data-id="${x.sid}"` : ''}><td class="l">${md(x.eta)}</td>${skuTd(x.sid)}
       <td class="l">${x.no}<span class="sub2w">${ST[x.st] || esc(x.st)}</span></td><td>${n0(x.c)}</td><td class="${x.r < x.c && x.eta < cut ? 'neg' : ''}">${n0(x.r)}</td><td>${wonF(x.ca)}</td><td>${wonF(x.ra)}</td>${ms ? `<td class="neg"><b>${wonF(x.ca - x.ra)}</b></td>` : ''}</tr>`).join('');
   }
