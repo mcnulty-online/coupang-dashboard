@@ -112,7 +112,7 @@ tbody tr.sel td { background: var(--accent-soft); }
 .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--pc, var(--idle)); }
 .neg { color: var(--crit-ink); }
 .wkpis { margin: 12px 0 4px; }
-.pnkpis { grid-template-columns: repeat(5, minmax(0, 1fr)); margin-bottom: 6px; }
+.pnkpis { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 6px; }
 .pnkpis .kpi { cursor: pointer; transition: border-color .12s, box-shadow .12s; }
 .pnkpis .kpi:hover { border-color: var(--accent); }
 .pnkpis .kpi.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
@@ -126,7 +126,7 @@ th.asort { cursor: pointer; user-select: none; }
 th.asort:hover { color: var(--ink); }
 .pnbar h2 { font-size: 15px; } .pnctl { display: flex; gap: 8px; align-items: center; }
 @media (max-width: 1100px) { .pnkpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 700px) { .pnkpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .kpis.pnkpis { grid-template-columns: 1fr; } }
 .pnleg i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
 .wchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 10px; }
 .wchips .chip b { margin-left: 4px; }
@@ -1802,11 +1802,9 @@ function renderPoNow() {
   const miss$ = past.c - past.r, fut$ = td.c + rest.c, sh = v => all.c ? v / all.c : 0;
   const pR = y >= P.month + '-01' ? `${M}/1~${+y.slice(8)}` : '-', fR = `${M}/${+cut.slice(8)}~${last}`;
   tiles('kpiPoNow', [
-    { lab: `${M}월 총 발주<br>(${M}/1~${last})`, val: won(all.c), unit: '원', sub: `${n0(all.n)}건` },
-    { lab: `${pR} 입고일<br>발주 금액`, val: won(past.c), unit: '원', sub: `${n0(past.n)}건` },
-    { lab: `${pR} 입고일<br>입고 금액`, val: won(past.r), unit: '원', sub: `입고율 <b>${pct(past.r / past.c)}</b>`, flag: '--good' },
-    { lab: `${fR} 입고 예정<br>발주 금액`, val: won(fut$), unit: '원', sub: `${n0(td.n + rest.n)}건` },
-    { lab: `${pR}<br>미납 금액`, val: won(miss$), unit: '원', sub: `${n0(miss.length)}건`, flag: '--crit' }
+    { lab: `${M}월 총 발주 금액`, val: won(all.c), unit: '원', sub: `${M}/1~${last} 입고일 · ${n0(all.n)}건` },
+    { lab: `${M}월 예상 입고 금액`, val: won(past.r + fut$), unit: '원', sub: `입고 ${won(past.r)} + 입고 예정 ${won(fut$)}`, flag: '--good' },
+    { lab: '미납 금액', val: won(miss$), unit: '원', sub: `${pR} 입고일 · ${n0(miss.length)}건`, flag: '--crit' }
   ]);
   // 칸을 누르면 아래에 내역
   const SETS = [
@@ -1814,8 +1812,9 @@ function renderPoNow() {
     { t: `${pR} 입고일 발주`, f: x => x.eta < cut },
     { t: `${pR} 입고일 입고`, f: x => x.eta < cut && x.r > 0 },
     { t: `${fR} 입고 예정 발주`, f: x => x.eta >= cut },
-    { t: `${pR} 미납`, f: x => x.eta < cut && x.r < x.c, miss: true }];
-  const TSET = [0, 1, 2, 3, 4];   // 칸 순서 → 내역 종류
+    { t: `${pR} 미납`, f: x => x.eta < cut && x.r < x.c, miss: true },
+    { t: `${M}월 예상 입고 (입고 + 입고 예정)`, f: x => (x.eta < cut && x.r > 0) || x.eta >= cut }];
+  const TSET = [0, 5, 4];   // 칸 순서 → 내역 종류
   const cards = [...document.querySelectorAll('#kpiPoNow .kpi')];
   cards.forEach((c, ci) => { const i = TSET[ci]; c.classList.toggle('on', state.pn === i); c.onclick = () => { state.pn = state.pn === i ? null : i; state.pnF = { q: '', day: '', st: '', rcv: '' }; delete AS.tPnD; renderPoNow();
     if (state.pn != null) requestAnimationFrame(() => document.getElementById('pnDetail').scrollIntoView({ behavior: 'smooth', block: 'nearest' })); }; });
