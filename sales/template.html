@@ -117,6 +117,8 @@ tbody tr.sel td { background: var(--accent-soft); }
 .pnkpis .kpi:hover { border-color: var(--accent); }
 .pnkpis .kpi.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
 .pnhint { margin: 2px 0 0; }
+.warnbar { background: color-mix(in srgb, var(--warn) 16%, var(--surface)); border: 1px solid var(--warn); border-radius: 10px; padding: 10px 14px; margin: 0 0 14px; font-size: 13px; color: var(--ink); display: grid; gap: 4px; }
+.warnbar b { font-weight: 700; }
 .pnflow { margin: 4px 0 14px; }
 .pnkpis .kpi .lab { font-size: 13px; font-weight: 600; color: var(--ink); word-break: keep-all; }
 .pnkpis .lab-note { display: block; font-weight: 400; color: var(--muted); font-size: 12px; margin-top: 2px; }
@@ -456,6 +458,7 @@ table.heat td.l { text-align: left; }
 </header>
 
 <main class="wrap">
+  <div class="warnbar" id="warnBar" hidden></div>
   <!-- ========== 판매 현황 ========== -->
   <section class="view" id="view-sales" role="tabpanel" aria-labelledby="tab-sales">
     <div class="kpair" id="kpiSales"></div>
@@ -2035,6 +2038,8 @@ function enhanceTables() {
 const asObs = new MutationObserver(() => { if (!asBusy) requestAnimationFrame(enhanceTables); });
 [document.querySelector('main'), document.getElementById('drawer')].filter(Boolean).forEach(el => asObs.observe(el, { childList: true, subtree: true }));
 
+(() => { const w = DATA.warn || [], el = document.getElementById('warnBar'); if (!el || !w.length) return;
+  el.hidden = false; el.innerHTML = w.map(t => `<div>⚠️ ${esc(t)}</div>`).join(''); })();
 function renderAll() {
   const quick = WINS.some(w => w.quick && w.id === state.win);
   document.querySelectorAll('#winChips .chip').forEach(c => c.setAttribute('aria-pressed', c.id === 'win-' + state.win || (c.id === 'calBtn' && !quick)));

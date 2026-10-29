@@ -111,6 +111,28 @@ if HIST:
 
 # 날짜 축: 판매·재고 중 이른 날짜 ~ 둘 다 있는 마지막 날짜
 end = min(s['d'].max(), o['d'].max())
+
+# ---- 업로드 점검: 비어 있는 파일 · 판매/재고 날짜 어긋남 → 대시보드 맨 위에 안내 ----
+def _nrows(f):
+    with open(f, encoding='utf-8-sig', errors='ignore') as fh:
+        return max(0, sum(1 for line in fh if line.strip()) - 1)
+def _when(f):
+    t = ''.join(ch for ch in os.path.basename(f) if ch.isdigit())[-14:]
+    return f'{int(t[4:6])}/{int(t[6:8])} {t[8:10]}:{t[10:12]}' if len(t) == 14 else os.path.basename(f)
+warns = []
+_pfiles_all = sorted(glob.glob(os.path.join(IN, 'PO_SKU_LIST*.csv')))
+_empty = set()
+for label, fl in (('판매', sfiles), ('재고', ofiles), ('발주', _pfiles_all)):
+    if fl and _nrows(fl[-1]) == 0:
+        _empty.add(fl[-1])
+        warns.append(f'가장 최근에 올린 {label} 파일({_when(fl[-1])} 내려받음)이 비어 있어요(데이터 0줄). 쿠팡에서 날짜를 확인해 다시 받아 올려주세요.')
+_md = lambda d: f'{int(d[5:7])}/{int(d[8:10])}'
+if s['d'].max() < o['d'].max():
+    warns.append(f'판매 자료는 {_md(s["d"].max())}까지, 재고 자료는 {_md(o["d"].max())}까지 있어서 대시보드는 {_md(end)} 기준으로 보여요. {_md(o["d"].max())} 판매 파일을 올리면 바로 반영돼요.')
+elif o['d'].max() < s['d'].max():
+    warns.append(f'재고 자료는 {_md(o["d"].max())}까지, 판매 자료는 {_md(s["d"].max())}까지 있어서 대시보드는 {_md(end)} 기준으로 보여요. {_md(s["d"].max())} 재고 파일을 올리면 바로 반영돼요.')
+for w in warns:
+    print('안내:', w)
 start = min(s['d'].min(), o['d'].min())
 days = [d.strftime('%Y-%m-%d') for d in pd.date_range(start, end)]
 di = {d: i for i, d in enumerate(days)}
@@ -367,7 +389,7 @@ if pa is not None and '확정수량' in pa and '입고수량' in pa:
     print(f'당월 발주·입고({cm}): 발주 {len(lines)}줄 · 확정 {_c/1e8:.2f}억 · {po_cut.date()}까지 입고 {_r/1e8:.2f}억')
 
 out = dict(opsOffset=ops_off, days=days, asOf=end, generated=datetime.now(timezone(timedelta(hours=9))).strftime('%Y-%m-%d %H:%M'),
-           files=dict(sales=[os.path.basename(f) for f in sfiles], ops=[os.path.basename(f) for f in ofiles],
+           warn=warns, files=dict(sales=[os.path.basename(f) for f in sfiles if f not in _empty], ops=[os.path.basename(f) for f in ofiles],
                       po=[os.path.basename(f) for f in pfiles]),
            missingOps=missing_ops, opsStart=ops_start, skus=skus, poOnly=po_only, hist=hist, poFc=po_fc, poNow=po_now)
 import gzip, base64
