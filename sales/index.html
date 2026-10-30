@@ -381,6 +381,7 @@ h2.sec .note { font-weight: 400; }
 .kgroup.pmcrow .fccard { grid-column: span 2; cursor: pointer; }
 .kgroup.pmcrow .fccard:hover { border-color: var(--accent) !important; }
 .kgroup.pmcrow .ivcard { grid-column: span 2; cursor: pointer; }
+.ppmnote { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
 .kgroup.pmcrow .ivcard:hover { border-color: var(--accent) !important; }
 .fccard .fclink { color: var(--accent); font-weight: 600; margin-left: 4px; white-space: nowrap; }
 .dtable.po thead tr.potot th { color: var(--ink); font-weight: 700; font-size: 12px; background: var(--accent-soft); border-bottom: 1px solid var(--line); }
@@ -1054,6 +1055,10 @@ function renderSales(L) {
   }
   const sepPart = mkPart('별도 관리 원두 매출액(GMV)', '별도 관리 원두 PPM', k => SEP_BEANS.includes(k.id));
   const etcPart = mkPart('기타 매출액(GMV)', '기타 PPM', k => ETC_SUB.includes(k.sub));
+  // 통합 PPM = 커피/차 + 음료만 (별도 관리 원두·기타 제외). 총 매출액은 전체 그대로
+  { const P = (a, b) => a && b ? { g: a.g + b.g, c: a.c + b.c } : null, cc = P(parts[1].cur, parts[2].cur), pp = P(parts[1].prv, parts[2].prv);
+    parts[0].ppmC = cc && cc.g ? (cc.g - cc.c * 1.1) / cc.g : NaN; parts[0].ppmP = pp && pp.g ? (pp.g - pp.c * 1.1) / pp.g : NaN;
+    parts[0].ppmNote = '(별도 관리 원두/기타 cate 제외)'; }
   const ORDER = [parts[0], parts[1], parts[2], sepPart, etcPart];   // 총 · 커피/차 · 음료 · 별도 관리 원두 · 기타
   ['', '커피/차', '음료', '별도 관리 원두', '기타'].forEach((g, i) => ORDER[i].key = g);   // 카드를 누르면 아래 SKU 표를 그 그룹만
   const arrow = (d, txt) => !isFinite(d) ? '' : `<b class="${d < 0 ? 'neg' : 'pos'}">${d < 0 ? '▼' : '▲'}${txt}</b>`;
@@ -1075,7 +1080,7 @@ function renderSales(L) {
     <div class="kgroup five">${ORDER.map(p => `<div class="kcell kclick" data-grp="${p.key}" title="${p.key ? `아래 전체 SKU를 ${p.key}만 보기` : '아래 전체 SKU를 전체로'}"><span class="ktag">${p.lg}</span><span class="kval">${wonFull(p.cur.g)}</span>
       <span class="ksub">${p.prv ? `${cmpLabel} ${wonFull(p.prv.g)} · ${arrow(p.cur.g - p.prv.g, p.prv.g ? Math.abs((p.cur.g - p.prv.g) / p.prv.g * 100).toFixed(1) + '%' : '')}` : `일평균 ${wonFull(p.cur.g / W)}`}</span></div>`).join('')}</div>
     <div class="kgroup five">${ORDER.map(p => `<div class="kcell kclick" data-grp="${p.key}" title="${p.key ? `아래 전체 SKU를 ${p.key}만 보기` : '아래 전체 SKU를 전체로'}"><span class="ktag">${p.lp}</span><span class="kval">${isFinite(p.ppmC) ? (p.ppmC * 100).toFixed(2) + '%' : '–'}</span>
-      <span class="ksub">${p.prv && isFinite(p.ppmP) && isFinite(p.ppmC) ? `${cmpLabel} ${(p.ppmP * 100).toFixed(2)}% · ${arrow(p.ppmC - p.ppmP, Math.abs((p.ppmC - p.ppmP) * 100).toFixed(2) + '%p')}` : (!p.cur.g ? '판매 없음' : !p.prv ? '비교 자료 없음' : '비교 기간 판매 없음')}</span></div>`).join('')}</div>
+      <span class="ksub">${p.prv && isFinite(p.ppmP) && isFinite(p.ppmC) ? `${cmpLabel} ${(p.ppmP * 100).toFixed(2)}% · ${arrow(p.ppmC - p.ppmP, Math.abs((p.ppmC - p.ppmP) * 100).toFixed(2) + '%p')}` : (!p.cur.g ? '판매 없음' : !p.prv ? '비교 자료 없음' : '비교 기간 판매 없음')}${p.ppmNote ? `<span class="ppmnote">${p.ppmNote}</span>` : ''}</span></div>`).join('')}</div>
     <div class="kgroup five pmcrow">${pmcCell}${ivCell}</div>
     <div class="mk">
       <table class="mkt"><thead><tr><th class="l"></th><th>매출 <small>${cmpLabel} 대비</small></th><th>PPM <small>${cmpLabel} 대비</small></th></tr></thead><tbody>
