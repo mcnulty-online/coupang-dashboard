@@ -119,9 +119,9 @@ tbody tr.sel td { background: var(--accent-soft); }
 .neg { color: var(--crit-ink); }
 .wkpis { margin: 12px 0 4px; }
 .pnkpis { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 6px; }
-.pnkpis .kpi, .wkpis .kpi { cursor: pointer; transition: border-color .12s, box-shadow .12s; }
-.pnkpis .kpi:hover, .wkpis .kpi:hover { border-color: var(--accent); }
-.pnkpis .kpi.on, .wkpis .kpi.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+#kpiStock .kpi, .pnkpis .kpi, .wkpis .kpi { cursor: pointer; transition: border-color .12s, box-shadow .12s; }
+#kpiStock .kpi:hover, .pnkpis .kpi:hover, .wkpis .kpi:hover { border-color: var(--accent); }
+#kpiStock .kpi.on, .pnkpis .kpi.on, .wkpis .kpi.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
 .pnhint { margin: 2px 0 0; }
 .mtdsum { display: grid; grid-template-columns: auto repeat(5, auto); justify-content: start; column-gap: 26px; row-gap: 6px; align-items: baseline; margin: 2px 0 12px; font-size: 13px; color: var(--ink-2); }
 .mtdsum .mlab { color: var(--muted); font-size: 12px; white-space: nowrap; }
@@ -525,7 +525,7 @@ table.heat td.l { text-align: left; }
     </div>
     <div class="kpis" id="kpiStock"></div>
     <div class="panel">
-      <div class="toolbar"><h2>전체 SKU 재고 <span class="hcount" id="nAll"></span></h2><div class="tfilters"><input type="search" id="stockSearch" placeholder="SKU명·ID·세부카테고리 검색" aria-label="전체 SKU 재고 검색"></div></div>
+      <div class="toolbar"><h2>전체 SKU 재고 <span class="hcount" id="nAll"></span><button class="chip" id="axTag" aria-pressed="true" hidden title="전체로 보기"></button></h2><div class="tfilters"><input type="search" id="stockSearch" placeholder="SKU명·ID·세부카테고리 검색" aria-label="전체 SKU 재고 검색"></div></div>
       <div class="stlegend" id="stLegStock"></div>
       <div class="tbl-wrap scroll7"><table id="tAll"></table></div>
     </div>
@@ -1315,6 +1315,7 @@ function renderStock(L) {
     PO_ONLY.map(x => { const c = sum(x.po.map(l => l[4])), r = sum(x.po.map(l => l[5])), e = x.po.map(l => l[2]).sort()[0];
       return `<tr><td class="l name">${esc(x.name)}<span class="cat">${x.id}</span></td><td>${n0(c)}</td><td>${n0(r)}</td><td>${md(e)}</td><td>${won(sum(x.po.map(l => l[6])))}</td></tr>`; }).join('') + '</tbody>'
     : '<tbody><tr><td class="l empty">없음</td></tr></tbody>';
+  bindStockTiles();
   renderStockAll(L);
   fitScroll5();
 }
@@ -1347,11 +1348,28 @@ function renderStLegend(id, L, cur, onPick) {
 }
 const ST_OPTS = [['', '상태 전체'], ['urgent', '긴급 (7일 미만)'], ['caution', '주의 (7~14일)'], ['stable', '안정 (14~90일)'], ['over', '과잉 (90일 이상)'], ['nosale', '판매없음'], ['na', '재고 정보없음']];
 state.ast = '';
+// 위 숫자 칸을 누르면 아래 '전체 SKU 재고' 표를 그 조건만 (다시 누르면 전체)
+const STOCK_AX = {
+  low: { l: '재고 7일 미만', f: k => k.inOps && k.bucket.key === 'urgent', sort: { key: 'doc', dir: 1 } },
+  over: { l: '재고 90일 이상', f: k => k.inOps && (k.bucket.key === 'over' || (k.bucket.key === 'nosale' && k.stock > 0)), sort: { key: 'stockVal', dir: -1 } },
+  so: { l: '최근 30일 품절 경험', f: k => k.inOps && k.so30 > 0, sort: { key: 'so30', dir: -1 } },
+  lost: { l: '품절 손실 발생', f: k => k.inOps && k.lost30 > 0, sort: { key: 'lost30', dir: -1 } } };
+state.ax = '';
+function bindStockTiles() {
+  const TX = ['', '', 'low', 'over', 'so', 'lost'];
+  [...document.querySelectorAll('#kpiStock .kpi')].forEach((c, i) => { const f = TX[i];
+    c.classList.toggle('on', !!f && state.ax === f); c.title = f ? '누르면 아래 표를 이것만 보기' : '누르면 아래 표 전체 보기';
+    c.onclick = () => { state.ax = state.ax === f ? '' : f; state.ast = ''; if (state.ax) state.aSort = { ...STOCK_AX[state.ax].sort };
+      bindStockTiles(); renderStockAll(stockList()); requestAnimationFrame(() => document.getElementById('tAll').closest('.panel').scrollIntoView({ behavior: 'smooth', block: 'start' })); }; });
+}
 function renderStockAll(L) {
   const q = state.aq.toLowerCase();
   // 상태 범례 = 필터 버튼
-  renderStLegend('stLegStock', L, state.ast, v => { state.ast = v; renderStockAll(stockList()); });
-  const rows = L.filter(k => (!state.ast || k.bucket.key === state.ast) && (!q || k.name.toLowerCase().includes(q) || String(k.id).includes(q) || k.cat.includes(q))).sort(sorter(state.aSort));
+  renderStLegend('stLegStock', L, state.ast, v => { state.ast = v; state.ax = ''; renderStockAll(stockList()); });
+  const AX = STOCK_AX[state.ax], tag = document.getElementById('axTag');
+  tag.hidden = !AX; tag.textContent = AX ? `${AX.l}만 보기 ✕` : '';
+  tag.onclick = () => { state.ax = ''; renderStock(stockList()); };
+  const rows = L.filter(k => (!AX || AX.f(k)) && (!state.ast || k.bucket.key === state.ast) && (!q || k.name.toLowerCase().includes(q) || String(k.id).includes(q) || k.cat.includes(q))).sort(sorter(state.aSort));
   document.getElementById('nAll').textContent = rows.length === L.length ? `${L.length}개` : `${rows.length}개 / 전체 ${L.length}개`;
   const t = document.getElementById('tAll');
   t.innerHTML = headRow(ACOLS, state.aSort, 'data-i') + '<tbody>' + (rows.length ? rows.map(k => `<tr class="click" data-id="${k.id}">
