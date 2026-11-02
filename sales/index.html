@@ -119,9 +119,9 @@ tbody tr.sel td { background: var(--accent-soft); }
 .neg { color: var(--crit-ink); }
 .wkpis { margin: 12px 0 4px; }
 .pnkpis { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 6px; }
-.pnkpis .kpi { cursor: pointer; transition: border-color .12s, box-shadow .12s; }
-.pnkpis .kpi:hover { border-color: var(--accent); }
-.pnkpis .kpi.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+.pnkpis .kpi, .wkpis .kpi { cursor: pointer; transition: border-color .12s, box-shadow .12s; }
+.pnkpis .kpi:hover, .wkpis .kpi:hover { border-color: var(--accent); }
+.pnkpis .kpi.on, .wkpis .kpi.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
 .pnhint { margin: 2px 0 0; }
 .mtdsum { display: grid; grid-template-columns: auto repeat(5, auto); justify-content: start; column-gap: 26px; row-gap: 6px; align-items: baseline; margin: 2px 0 12px; font-size: 13px; color: var(--ink-2); }
 .mtdsum .mlab { color: var(--muted); font-size: 12px; white-space: nowrap; }
@@ -1993,12 +1993,17 @@ function renderWatch(L) {
     { lab: '품절 영향', val: cnt('so'), unit: 'SKU', sub: '재고 0 또는 품절일 많음' },
     { lab: '놓친 매출 추정', val: won(sum(bad.map(x => x.lostG))), unit: '원', sub: `판정 대상 ${judged.length}개 · 판단 보류 ${low.length}개` }
   ]);
-  const F = [['', '전체', bad.length], ['hi', '급감만', bad.filter(x => x.lv === 'hi').length], ['view', '노출 감소 의심', cnt('view')], ['conv', '전환 감소 의심', cnt('conv')], ['so', '품절 영향', cnt('so')]];
+  const F = [['', '전체', bad.length], ['hi', '급감만', bad.filter(x => x.lv === 'hi').length], ['mid', '주의만', bad.filter(x => x.lv === 'mid').length], ['view', '노출 감소 의심', cnt('view')], ['conv', '전환 감소 의심', cnt('conv')], ['so', '품절 영향', cnt('so')]];
   if (!F.some(f => f[0] === state.wF && (f[2] || !f[0]))) state.wF = '';
   const ch = document.getElementById('wChips');
   ch.innerHTML = F.filter(f => !f[0] || f[2]).map(([v, l, n]) => `<button class="chip" data-f="${v}" aria-pressed="${state.wF === v}">${l}<b>${n}</b></button>`).join('');
   ch.querySelectorAll('.chip').forEach(b => b.onclick = () => { state.wF = b.dataset.f; renderWatch(stockList()); });
-  const rows = bad.filter(x => !state.wF || (state.wF === 'hi' ? x.lv === 'hi' : x.cause === state.wF)).sort((a, b) => sorter(state.wSort)(a, b) || b.lostG - a.lostG);
+  // 위 숫자 칸을 눌러도 같은 필터 (다시 누르면 전체)
+  const TF = ['hi', 'mid', 'view', 'conv', 'so', ''];
+  [...document.querySelectorAll('#kpiWatch .kpi')].forEach((c, i) => { const f = TF[i]; c.classList.toggle('on', !!f && state.wF === f);
+    c.title = f ? '누르면 아래 표를 이것만 보기' : '누르면 아래 표 전체 보기';
+    c.onclick = () => { state.wF = state.wF === f ? '' : f; renderWatch(stockList()); requestAnimationFrame(() => document.getElementById('wChips').scrollIntoView({ behavior: 'smooth', block: 'nearest' })); }; });
+  const rows = bad.filter(x => !state.wF || (state.wF === 'hi' || state.wF === 'mid' ? x.lv === state.wF : x.cause === state.wF)).sort((a, b) => sorter(state.wSort)(a, b) || b.lostG - a.lostG);
   document.getElementById('nWatch').textContent = `${rows.length}개`;
   const COLS = [{ key: 'lvOrd', lab: '판정', l: true }, { key: null, lab: '원인 추정', l: true }, { key: null, lab: 'SKU', l: true },
     { key: 'exp', lab: '평소라면', sub: `${R}일 기대` }, { key: 'obs', lab: '실제', sub: `최근 ${R}일` }, { key: 'dropS', lab: '증감' },
