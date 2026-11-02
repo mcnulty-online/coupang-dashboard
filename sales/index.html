@@ -386,6 +386,8 @@ h2.sec .note { font-weight: 400; }
 .fccard .fclink { color: var(--accent); font-weight: 600; margin-left: 4px; white-space: nowrap; }
 .dtable.po thead tr.potot th { color: var(--ink); font-weight: 700; font-size: 12px; background: var(--accent-soft); border-bottom: 1px solid var(--line); }
 .dtable.po tr.done td { color: var(--muted); }
+.dtable.po .lostk { color: var(--muted); font-weight: 600; }
+.dtable.po tr.lostcap td { font-size: 11px; color: var(--muted); background: var(--surface-2, var(--grid)); padding-top: 6px; padding-bottom: 6px; }
 .dtable.po tbody.donegrp tr:first-child td { border-top: 1px dashed var(--line); }
 .podone { justify-self: start; margin-top: 8px; font-size: 12px; }
 @media (max-width: 860px) { .kpis.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -694,6 +696,7 @@ const docTxt = d => d == null ? '–' : d === Infinity ? '판매없음' : d >= 9
 const BORD = { urgent: 0, caution: 1, stable: 2, over: 3, nosale: 4, na: 5 };
 
 /* ---------- 재고·발주 지표 (기준일 고정) ---------- */
+const PO_CUT = (DATA.poNow && DATA.poNow.cut) || ASOF;   // 발주 자료 날짜 (가장 최근 발주 파일을 내려받은 날)
 DATA.skus.forEach(k => {
   k.avg30 = sum(k.q.slice(-AVG_DAYS)) / AVG_DAYS;
   { const g = k.g.slice(-AVG_DAYS), so = k.so.slice(-AVG_DAYS), ok = g.filter((_, i) => !so[i]), b = ok.length ? sum(ok) / ok.length : 0;
@@ -706,11 +709,17 @@ DATA.skus.forEach(k => {
   k.bucket = docBucket(k.doc); k.bucketOrd = BORD[k.bucket.key];
   k.runout = k.doc != null && isFinite(k.doc) ? addDays(ASOF, Math.floor(k.doc)) : null;
   // 발주: 미입고 수량 = 확정 − 입고
+  // 남은 수량 구분 (발주 자료 날짜 기준): 미납 = 거래명세서확인요청인데 입고 부족(입고 마감, 이후 추가 입고 0%)
+  //   미출 추정 = 발주확정 · 입고 0 · 입고일 3일 이상 지남(이후 입고 약 10%, 10일+는 0%) → 둘 다 입고 예정에서 뺌
   k.pending = k.po.map(l => {
-    const [no, ctr, eta, odate, conf, recv, amt, stat, type] = l, q = conf - recv;
-    return { no, ctr, eta, odate, conf, recv, amt, stat, type, q, qamt: conf ? amt * q / conf : 0, late: q > 0 && eta <= ASOF, arr: eta <= ASOF ? addDays(ASOF, 1) : eta };
+    const [no, ctr, eta, odate, conf, recv, amt, stat, type] = l, q = conf - recv, dl = dayDiff(eta, PO_CUT);
+    const kind = q <= 0 ? 'done' : stat === '거래명세서확인요청' ? 'short' : (recv === 0 && dl >= 3) ? 'noship' : eta < PO_CUT ? 'late' : 'open';
+    const live = kind === 'open' || kind === 'late';
+    return { no, ctr, eta, odate, conf, recv, amt, stat, type, q, kind, live, lost: kind === 'short' || kind === 'noship', qamt: conf ? amt * q / conf : 0,
+      late: kind === 'late', arr: eta <= ASOF ? addDays(ASOF, 1) : eta };
   });
-  const pend = k.pending.filter(p => p.q > 0);
+  const pend = k.pending.filter(p => p.live);
+  k.lostQ = sum(k.pending.filter(p => p.lost).map(p => p.q)); k.lostN = k.pending.filter(p => p.lost).length;
   k.pend = sum(pend.map(p => p.q)); k.pendAmt = sum(pend.map(p => p.qamt));
   k.firstEta = pend.length ? pend.map(p => p.arr).sort()[0] : null;
   k.lateN = pend.filter(p => p.late).length;
@@ -1281,8 +1290,8 @@ function renderStock(L) {
 
   renderPoForecast();
   // ---- 발주 점검 ----
-  const P = L.filter(k => k.pend > 0), lines = L.flatMap(k => k.pending.filter(p => p.q > 0).map(p => ({ k, p })));
-  const late = lines.filter(x => x.p.late), allLines = L.flatMap(k => k.pending);
+  const P = L.filter(k => k.pend > 0), lines = L.flatMap(k => k.pending.filter(p => p.live).map(p => ({ k, p })));
+  const late = lines.filter(x => x.p.late), allLines = L.flatMap(k => k.pending), lostPo = L.flatMap(k => k.pending.filter(p => p.lost));
   const gap = O.filter(k => k.gap > 0), poOver = O.filter(k => k.pend > 0 && (k.bucketPO.key === 'over' || k.bucketPO.key === 'nosale'));
   const confAll = sum(allLines.map(p => p.conf)), recvAll = sum(allLines.map(p => p.recv));
   const poDates = allLines.map(p => p.odate).sort();
@@ -1290,7 +1299,7 @@ function renderStock(L) {
   tiles('kpiPo', [
     { lab: '입고 대기 수량', val: n0(sum(P.map(k => k.pend))), unit: '개', sub: `${won(sum(P.map(k => k.pendAmt)))}원 · SKU ${P.length}개` },
     { lab: '입고 진행률', val: pct(confAll ? recvAll / confAll : NaN, 0), sub: `확정 ${n0(confAll)} 중 입고 ${n0(recvAll)}` },
-    { lab: '입고 지연 발주', val: late.length, unit: '건', sub: `미입고 ${n0(sum(late.map(x => x.p.q)))}개`, flag: late.length ? '--serious' : null },
+    { lab: '입고 지연 발주', val: late.length, unit: '건', sub: `미입고 ${n0(sum(late.map(x => x.p.q)))}개 · 미납·미출 추정 ${lostPo.length}건은 제외`, flag: late.length ? '--serious' : null },
     { lab: '입고 전 품절 위험', val: gap.length, unit: 'SKU', sub: `입고 후 과잉 예상 ${poOver.length}개`, flag: gap.length ? '--crit' : null }
   ]);
   smallTable('tGap', 'nGap', ['SKU', '재고', '일평균', '재고 소진', '첫 입고', '공백'], [...gap].sort((a, b) => b.avg30 - a.avg30).map(k =>
@@ -1387,10 +1396,10 @@ function renderPanel(k) {
   if (state.mode === 'yoy' && !HMAP.has(k.id)) state.mode = 'qty';
 
   // 미래: 기준일 다음날부터, 마지막 입고 +7일 또는 최소 14일
-  const lastArr = k.pending.filter(x => x.q > 0).map(x => x.arr).sort().pop();
+  const lastArr = k.pending.filter(x => x.live).map(x => x.arr).sort().pop();
   const F = k.inOps ? Math.min(45, Math.max(14, lastArr ? dayDiff(ASOF, lastArr) + 7 : 14)) : 0;
   const fDays = [...Array(F).keys()].map(j => addDays(ASOF, j + 1));
-  const arrive = fDays.map(d => sum(k.pending.filter(x => x.q > 0 && x.arr === d).map(x => x.q)));
+  const arrive = fDays.map(d => sum(k.pending.filter(x => x.live && x.arr === d).map(x => x.q)));
   let s0 = k.stock || 0; const proj = fDays.map((_, j) => (s0 = Math.max(0, s0 - k.avg30 + arrive[j])));
   const showFuture = state.mode === 'stock' && F > 0;
 
@@ -1417,16 +1426,18 @@ function renderPanel(k) {
     <details class="daily" open><summary>일자별 상세 표</summary><div class="tbl-wrap dtable"><table id="tDaily"></table></div></details>
 
     ${k.po.length ? (() => {
-      const open = poByToday(k.pending.filter(x => x.q > 0)), done = poByToday(k.pending.filter(x => x.q <= 0));
+      const open = poByToday(k.pending.filter(x => x.live)), lostL = poByToday(k.pending.filter(x => x.lost)), done = poByToday(k.pending.filter(x => x.q <= 0));
+      const KL = { short: '미납 (입고 마감)', noship: '미출 추정' };
       const tot = L => [sum(L.map(x => x.conf)), sum(L.map(x => x.recv)), sum(L.map(x => Math.max(0, x.q))), sum(L.map(x => x.amt))].join(',');
       const totCells = (L, label) => { const [a, b, c, d] = tot(L).split(',').map(Number);
         return `<th class="l" colspan="4">${label}</th><th>${n0(a)}</th><th>${n0(b)}</th><th>${n0(c)}</th><th>${won(d)}</th><th></th>`; };
-      const row = x => `<tr class="${x.q > 0 ? '' : 'done'}"><td class="l">${x.no}</td><td class="l">${md(x.odate)}</td><td class="l">${esc(x.ctr)}</td><td class="l ${x.late ? 'neg' : ''}">${md(x.eta)} <span class="dday">${dLabel(x.eta)}</span>${x.late ? ' 지연' : ''}</td>
-        <td>${n0(x.conf)}</td><td>${n0(x.recv)}</td><td>${x.q > 0 ? n0(x.q) : '·'}</td><td>${won(x.amt)}</td><td class="l">${esc(x.stat)}${x.type !== '일반' ? ` · ${esc(x.type)}` : ''}</td></tr>`;
-      return `<details class="daily"><summary>발주 내역 · 미입고 ${open.length}건${done.length ? ` · 입고 완료 ${done.length}건` : ''}</summary><div class="tbl-wrap dtable po"><table>
+      const row = x => `<tr class="${x.live ? '' : 'done'}"><td class="l">${x.no}</td><td class="l">${md(x.odate)}</td><td class="l">${esc(x.ctr)}</td><td class="l ${x.late ? 'neg' : ''}">${md(x.eta)} <span class="dday">${dLabel(x.eta)}</span>${x.late ? ' 지연' : x.lost ? ` <b class="lostk">${KL[x.kind]}</b>` : ''}</td>
+        <td>${n0(x.conf)}</td><td>${n0(x.recv)}</td><td>${x.live ? n0(x.q) : x.lost ? `<s>${n0(x.q)}</s>` : '·'}</td><td>${won(x.amt)}</td><td class="l">${esc(x.stat)}${x.type !== '일반' ? ` · ${esc(x.type)}` : ''}</td></tr>`;
+      return `<details class="daily"><summary>발주 내역 · 미입고 ${open.length}건${lostL.length ? ` · 미납·미출 추정 ${lostL.length}건` : ''}${done.length ? ` · 입고 완료 ${done.length}건` : ''}</summary><div class="tbl-wrap dtable po"><table>
       <thead><tr><th class="l">발주번호</th><th class="l">발주일</th><th class="l">센터</th><th class="l">입고예정</th><th>확정</th><th>입고</th><th>미입고</th><th>금액<span class="thsub">VAT 제외</span></th><th class="l">현황</th></tr>
       <tr class="potot" data-open="${tot(open)}" data-all="${tot([...open, ...done])}">${totCells(open, `합계 · 미입고 ${open.length}건`)}</tr></thead>
       <tbody>${open.length ? open.map(row).join('') : '<tr><td class="l empty" colspan="9">미입고 발주가 없습니다.</td></tr>'}</tbody>
+      ${lostL.length ? `<tbody class="lostgrp"><tr class="lostcap"><td class="l" colspan="9">안 들어올 것으로 보는 발주 ${lostL.length}건 · 합계·입고 예정에서 제외 (거래명세서 확인요청인데 덜 들어옴 = 미납 / 발주확정인데 입고일 3일 넘게 입고 0 = 미출 추정)</td></tr>${lostL.map(row).join('')}</tbody>` : ''}
       ${done.length ? `<tbody class="donegrp" hidden>${done.map(row).join('')}</tbody>` : ''}</table></div>
       ${done.length ? `<button class="chip podone" aria-expanded="false">입고 완료 ${done.length}건 보기</button>` : ''}</details>`;
     })() : ''}`;
@@ -1435,7 +1446,7 @@ function renderPanel(k) {
     e.stopPropagation(); const grp = btn.closest('details').querySelector('.donegrp'), show = grp.hidden;
     grp.hidden = !show; btn.setAttribute('aria-expanded', show); btn.textContent = show ? '입고 완료 접기' : `입고 완료 ${grp.rows.length}건 보기`;
     const tr = btn.closest('details').querySelector('.potot'), [a, b, c, d] = (show ? tr.dataset.all : tr.dataset.open).split(',').map(Number);
-    const nOpen = btn.closest('details').querySelectorAll('tbody:not(.donegrp) tr:not(:has(.empty))').length;
+    const nOpen = btn.closest('details').querySelectorAll('tbody:not(.donegrp):not(.lostgrp) tr:not(:has(.empty))').length;
     tr.innerHTML = `<th class="l" colspan="4">${show ? `합계 · 전체 ${nOpen + grp.rows.length}건` : `합계 · 미입고 ${nOpen}건`}</th><th>${n0(a)}</th><th>${n0(b)}</th><th>${n0(c)}</th><th>${won(d)}</th><th></th>`;
   });
   const hb = j => {
@@ -1834,17 +1845,20 @@ function renderPoNow() {
   const cut = P.cut, M = +P.month.slice(5), last = daysInMonth(P.month), nb = new Set();
   const S = f => { let c = 0, r = 0, n = 0; X.forEach(x => { if (f(x)) { c += x.ca; r += x.ra; n++; } }); return { c, r, n }; };
   const all = S(() => true), td = S(x => x.eta === cut), upto = S(x => x.eta <= cut), past = S(x => x.eta < cut), rest = S(x => x.eta > cut);
-  const miss = X.filter(x => x.eta < cut && x.r < x.c);
+  // 입고일 지난 부족분 구분: 미납(거래명세서확인요청 = 입고 마감) · 미출 추정(발주확정·입고 0·3일+) → 안 들어옴 / 나머지(1~2일 지연) → 들어올 수 있음
+  X.forEach(x => { x.dl = dayDiff(x.eta, cut); x.kind = !(x.eta < cut && x.r < x.c) ? '' : x.st === 'r' ? 'short' : (x.r === 0 && x.dl >= 3) ? 'noship' : 'late'; });
+  const miss = X.filter(x => x.kind === 'short' || x.kind === 'noship'), lateX = X.filter(x => x.kind === 'late');
+  const shortA = sum(X.filter(x => x.kind === 'short').map(x => x.ca - x.ra)), noshipA = sum(X.filter(x => x.kind === 'noship').map(x => x.ca - x.ra)), lateA = sum(lateX.map(x => x.ca - x.ra));
   const tm = P.dl.slice(11), nxt = addDays(cut, 1);
   document.getElementById('pnTitle').textContent = `${M}월 발주·입고 현황`;
   document.getElementById('pnNote').innerHTML = `입고일 = 쿠팡 입고예정일 · 금액은 VAT 제외 · <b>${md(cut)} ${tm}</b> 발주 자료 기준`;
   const y = addDays(cut, -1), m1 = `${M}/1`, upTxt = y >= P.month + '-01' ? `${m1}~${md(y)}` : '없음';
-  const miss$ = past.c - past.r, fut$ = td.c + rest.c, sh = v => all.c ? v / all.c : 0;
+  const miss$ = shortA + noshipA, fut$ = td.c + rest.c + lateA, sh = v => all.c ? v / all.c : 0;
   const pR = y >= P.month + '-01' ? `${M}/1~${+y.slice(8)}` : '-', fR = `${M}/${+cut.slice(8)}~${last}`;
   tiles('kpiPoNow', [
     { lab: `${M}월 총 발주 금액`, val: won(all.c), unit: '원', sub: `${M}/1~${last} 입고일 · ${n0(all.n)}건` },
-    { lab: `${M}월 예상 입고 금액`, val: won(past.r + fut$), unit: '원', sub: `입고 ${won(past.r)} + 입고 예정 ${won(fut$)}`, flag: '--good' },
-    { lab: '미납 금액 <span class="lab-note">(단종 상품 발주 / 단순 재고 부족 미납 등)</span>', val: won(miss$), unit: '원', sub: `${pR} 입고일 · ${n0(miss.length)}건`, flag: '--crit' },
+    { lab: `${M}월 예상 입고 금액`, val: won(past.r + fut$), unit: '원', sub: `입고 ${won(past.r)} + 입고 예정 ${won(fut$)}${lateA ? ` (지연 ${won(lateA)} 포함)` : ''}`, flag: '--good' },
+    { lab: '미납 금액 <span class="lab-note">(단종 상품 발주 / 단순 재고 부족 미납 등)</span>', val: won(miss$), unit: '원', sub: `미납 ${won(shortA)} · 미출 추정 ${won(noshipA)} · ${n0(miss.length)}건`, flag: '--crit' },
     { lab: `${M}월 예상 납품률`, val: pct((past.r + fut$) / all.c), unit: '', sub: '예상 입고 금액 ÷ 총 발주 금액' }
   ]);
   // 칸을 누르면 아래에 내역
@@ -1853,8 +1867,8 @@ function renderPoNow() {
     { t: `${pR} 입고일 발주`, f: x => x.eta < cut },
     { t: `${pR} 입고일 입고`, f: x => x.eta < cut && x.r > 0 },
     { t: `${fR} 입고 예정 발주`, f: x => x.eta >= cut },
-    { t: `${pR} 미납`, f: x => x.eta < cut && x.r < x.c, miss: true },
-    { t: `${M}월 예상 입고 (입고 + 입고 예정)`, f: x => (x.eta < cut && x.r > 0) || x.eta >= cut }];
+    { t: `${pR} 미납·미출 추정`, f: x => x.kind === 'short' || x.kind === 'noship', miss: true },
+    { t: `${M}월 예상 입고 (입고 + 입고 예정 + 1~2일 지연)`, f: x => (x.eta < cut && x.r > 0) || x.eta >= cut || x.kind === 'late' }];
   const TSET = [0, 5, 4, 0];   // 칸 순서 → 내역 종류
   const cards = [...document.querySelectorAll('#kpiPoNow .kpi')];
   cards.forEach((c, ci) => { const i = TSET[ci]; c.classList.toggle('on', state.pn === i); c.onclick = () => { state.pn = state.pn === i ? null : i; state.pnF = { q: '', day: '', st: '', rcv: '' }; delete AS.tPnD; renderPoNow();
@@ -1897,7 +1911,7 @@ function renderPoNow() {
     document.getElementById('pnDTitle').innerHTML = `${D.t} <span class="hcount">${n0(rows.length)}건${R.length !== R0.length ? ` / 전체 ${n0(R0.length)}건` : ''}</span>`;
     head = `<th class="l">입고일</th><th class="l">SKU</th><th class="l">발주번호 · 상태</th><th>확정 수량</th><th>입고 수량</th><th>발주금액</th><th>입고금액</th>${ms ? '<th>미납 금액</th>' : ''}`;
     body = rows.map(x => `<tr${SKU_BY_ID.has(x.sid) ? ` class="click" data-id="${x.sid}"` : ''}><td class="l">${md(x.eta)}</td>${skuTd(x.sid)}
-      <td class="l">${x.no}<span class="sub2w">${ST[x.st] || esc(x.st)}</span></td><td>${n0(x.c)}</td><td class="${x.r < x.c && x.eta < cut ? 'neg' : ''}">${n0(x.r)}</td><td>${wonF(x.ca)}</td><td>${wonF(x.ra)}</td>${ms ? `<td class="neg"><b>${wonF(x.ca - x.ra)}</b></td>` : ''}</tr>`).join('');
+      <td class="l">${x.no}<span class="sub2w">${ST[x.st] || esc(x.st)}${x.kind === 'short' ? ' · 미납' : x.kind === 'noship' ? ' · 미출 추정' : x.kind === 'late' ? ` · 지연 D+${x.dl}` : ''}</span></td><td>${n0(x.c)}</td><td class="${x.r < x.c && x.eta < cut ? 'neg' : ''}">${n0(x.r)}</td><td>${wonF(x.ca)}</td><td>${wonF(x.ra)}</td>${ms ? `<td class="neg"><b>${wonF(x.ca - x.ra)}</b></td>` : ''}</tr>`).join('');
   }
   const cols = state.pnV === 'sku' ? 8 : (ms ? 8 : 7), lead = state.pnV === 'sku' ? 3 : 3;
   document.getElementById('tPnD').innerHTML = `<thead><tr>${head}</tr></thead><tbody>${R.length ? `<tr class="tot"><td class="l" colspan="${lead}">합계</td><td>${n0(sum(R.map(x => x.c)))}</td><td>${n0(sum(R.map(x => x.r)))}</td><td>${wonF(tc)}</td><td>${wonF(tr)}</td>${ms ? `<td class="neg"><b>${wonF(tc - tr)}</b></td>` : state.pnV === 'sku' ? `<td>${pct(tr / tc, 0)}</td>` : ''}</tr>` + body : `<tr><td class="l empty" colspan="${cols}">없음</td></tr>`}</tbody>`;
