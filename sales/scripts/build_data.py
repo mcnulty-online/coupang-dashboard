@@ -221,6 +221,7 @@ if HIST:
     cols = ['d', 'SKU ID', 'SKU명', '세부카테고리', '브랜드', '매출액(GMV)', '판매 수량 (SKU ID)', '반품 수량', '매입원가(COGS)',
             '프로모션 발생 매출액', '주문건수', '조회수']
     allS = s[cols].copy()
+    allS['pmc'] = pd.to_numeric(s['쿠팡 추가 할인가'], errors='coerce').fillna(0) if '쿠팡 추가 할인가' in s else 0   # PMC = 쿠팡 추가 할인가
     allS = allS[allS['d'] <= end]
     allS['ym'] = allS['d'].str[:7]
     months = sorted(allS['ym'].unique())
@@ -230,14 +231,14 @@ if HIST:
     hm = allS.sort_values('d').groupby('SKU ID').tail(1).set_index('SKU ID')
     agg = allS.groupby(['SKU ID', 'ym']).agg(g=('매출액(GMV)', 'sum'), q=('판매 수량 (SKU ID)', 'sum'), r=('반품 수량', 'sum'),
                                             c=('매입원가(COGS)', 'sum'), p=('프로모션 발생 매출액', 'sum'),
-                                            o=('주문건수', 'sum'), v=('조회수', 'sum')).reset_index()
+                                            o=('주문건수', 'sum'), v=('조회수', 'sum'), pmc=('pmc', 'sum')).reset_index()
     # 이번 달(부분)과 같은 날짜 범위의 작년 값
     endd = pd.Timestamp(end)
     ly_start, ly_end = (endd.replace(day=1) - pd.DateOffset(years=1)).strftime('%Y-%m-%d'), (endd - pd.DateOffset(years=1)).strftime('%Y-%m-%d')
     lym = allS[(allS['d'] >= ly_start) & (allS['d'] <= ly_end)].groupby('SKU ID').agg(
         g=('매출액(GMV)', 'sum'), q=('판매 수량 (SKU ID)', 'sum'), c=('매입원가(COGS)', 'sum'), p=('프로모션 발생 매출액', 'sum'),
-        r=('반품 수량', 'sum'), o=('주문건수', 'sum'), v=('조회수', 'sum'))
-    HF = ['g', 'q', 'r', 'c', 'p', 'o', 'v']
+        r=('반품 수량', 'sum'), o=('주문건수', 'sum'), v=('조회수', 'sum'), pmc=('pmc', 'sum'))
+    HF = ['g', 'q', 'r', 'c', 'p', 'o', 'v', 'pmc']
     hsku = {}
     for sid, r in hm.iterrows():
         cat = meta[sid]['cat'] if sid in meta else r['세부카테고리']

@@ -1506,7 +1506,7 @@ function renderPanel(k) {
       const j = lyI(i), pp = Gm[i] ? (Gm[i] - Cm[i] * 1.1) / Gm[i] : NaN, part = PARTIAL && i === HMN - 1;
       const lq = part ? hk.ly.q : (j >= 0 ? Q[j] : null);
       document.getElementById('hb').innerHTML = `<b>${HM[i].replace('-', '년 ')}월</b>${part ? `<span class="tag">1~${H.mtdDays}일 · 진행 중</span>` : i === lf ? '<span class="tag">최근 달</span>' : ''}
-        <span>판매 <b>${n0(Q[i])}</b></span><span>매출 <b>${won(Gm[i])}</b></span><span>PPM <b>${pct(pp)}</b></span><span>평균 판매단가 <b>${Q[i] ? n0(Gm[i] / Q[i]) : '–'}</b></span>
+        <span>판매 <b>${n0(Q[i])}</b></span><span>매출 <b>${won(Gm[i])}</b></span><span>PPM <b>${pct(pp)}</b></span>${hk.pmc ? `<span>PMC <b>${won(hk.pmc[i] || 0)}</b></span>` : ''}<span>평균 판매단가 <b>${Q[i] ? n0(Gm[i] / Q[i]) : '–'}</b></span>
         ${i > 0 ? (part ? `<span>전월 대비(일평균) ${pctB(Q[i] / H.mtdDays, Q[i - 1] / daysInMonth(HM[i - 1]))}</span>` : `<span>전월 대비 ${pctB(Q[i], Q[i - 1])}</span>`) : ''}<span>전년 동월${part ? '(같은 날짜)' : ''} ${lq ? `<b>${n0(lq)}</b> ${pctB(Q[i], lq)}` : '<b>없음</b>'}</span>`;
     };
     mhb(PARTIAL ? HMN - 1 : lf);
@@ -1531,6 +1531,7 @@ function renderPanel(k) {
     el.querySelectorAll('.seg button').forEach(b => b.onclick = e => { e.stopPropagation(); state.mode = b.id.slice(5); renderPanel(k); });
     const det = el.querySelector('#tDaily').closest('details'); det.querySelector('summary').textContent = '월별 표'; det.open = true; el.querySelector('#openLegend').after(det);   // 예시처럼 그래프 바로 아래에 월별 표
     const R2 = [['판매량', i => n0(Q[i]), true], ['매출(만원)', i => n0(Gm[i] / 1e4)], ['PPM(%)', i => Gm[i] ? ((Gm[i] - Cm[i] * 1.1) / Gm[i] * 100).toFixed(1) : '–'],
+      ['PMC', i => hk.pmc ? (hk.pmc[i] ? won(hk.pmc[i]) : (Gm[i] ? '0' : '–')) : '–'],
       ['평균 판매단가', i => Q[i] ? n0(Gm[i] / Q[i]) : '–'],
       ['전년 동월 판매', i => { const j = lyI(i); return PARTIAL && i === HMN - 1 ? n0(hk.ly.q) : j >= 0 ? n0(Q[j]) : '–'; }],
       ['판매량 YoY', i => { const j = lyI(i), l = PARTIAL && i === HMN - 1 ? hk.ly.q : (j >= 0 ? Q[j] : 0); return l ? `<span class="${Q[i] < l ? 'neg' : 'pos'}">${Q[i] >= l ? '+' : ''}${((Q[i] - l) / l * 100).toFixed(0)}%</span>` : '–'; }]];
