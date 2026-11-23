@@ -1405,7 +1405,7 @@ function renderPanel(k) {
   const S = a => idx.map(i => a[i]);
   const g = S(k.g), q = S(k.q), c = S(k.c), p = S(k.p), pq = S(k.pq);
   const ppmD = g.map((x, j) => x ? (x - c[j] * 1.1) / x * 100 : null);
-  const Qp = sum(q), Gp = sum(g), Cp = sum(c), Rp = sum(S(k.r)), Op = sum(S(k.o)), Vp = sum(S(k.v)), SOp = sum(S(k.so));
+  const Qp = sum(q), Gp = sum(g), Cp = sum(c), Rp = sum(S(k.r)), Op = sum(S(k.o)), Vp = sum(S(k.v)), SOp = sum(S(k.so)), PMp = sum(S(k.pmc));
   const ppmP = Gp ? (Gp - Cp * 1.1) / Gp : NaN;
   const avg = Qp / W, mx = Math.max(...q), mxi = q.indexOf(mx);
   const r7 = sum(k.q.slice(-7)) / Math.min(7, N), p7 = N >= 14 ? sum(k.q.slice(-14, -7)) / 7 : NaN;
@@ -1428,7 +1428,7 @@ function renderPanel(k) {
     </div>
     <p class="dp-sum">15일 합계 <b>${n0(Qp)}개</b> · 매출 <b>${won(Gp)}원</b> · 평균 판매단가 <b>${Qp ? n0(Gp / Qp) + '원' : '–'}</b> · 일평균 <b>${avg.toFixed(1)}</b> · 최대 <b>${n0(mx)}</b>${mx ? ` (${md(wDays[mxi])})` : ''}
       · 최근 7일 평균 <b>${r7.toFixed(1)}</b> ${isFinite(chg) ? `(직전 7일 대비 <b class="${chg < 0 ? 'down' : 'up'}">${chg > 0 ? '+' : ''}${(chg * 100).toFixed(0)}%</b>)` : ''}
-      · PPM <b>${pct(ppmP)}</b> · 전환율 <b>${pct(Vp ? Op / Vp : NaN)}</b> · 반품률 <b>${pct(Qp ? Rp / Qp : NaN)}</b> · 품절 <b>${SOp}일</b> · 발주상태 <b>${esc(k.status)}</b>
+      · PPM <b>${pct(ppmP)}</b> · PMC <b>${won(PMp)}원</b> · 전환율 <b>${pct(Vp ? Op / Vp : NaN)}</b> · 반품률 <b>${pct(Qp ? Rp / Qp : NaN)}</b> · 품절 <b>${SOp}일</b> · 발주상태 <b>${esc(k.status)}</b>
       ${k.pend ? `<br>입고 대기 <b>${n0(k.pend)}개</b> (${won(k.pendAmt)}원) · 첫 입고 <b>${md(k.firstEta)}</b>${k.lateN ? ` · <b class="down">지연 ${k.lateN}건</b>` : ''} · 예상 소진 <b>${k.runout ? md(k.runout) : docTxt(k.doc)}</b> → 발주 반영 <b>${k.runoutPO ? md(k.runoutPO) : docTxt(k.docPO)}</b>${k.gap > 0 && isFinite(k.gap) ? ` · <b class="down">입고 전 ${k.gap}일 공백</b>` : ''}` : ''}</p>
     <div class="dp-mini">
       <div><span>판매 · 15일</span><b>${n0(Qp)}개</b><small>일평균 ${n0(avg)}</small></div>
@@ -1474,7 +1474,7 @@ function renderPanel(k) {
     const i = idx[j], ctr = CG.filter(x => k[x.k][i]).map(x => `${x.l} ${n0(k[x.k][i])}`).join(' · ');
     box.innerHTML = `<b>${DAYS[i]} (${wd(DAYS[i])})</b>${i === N - 1 ? '<span class="tag">기준일</span>' : ''}
       <span>판매 <b>${n0(k.q[i])}</b>개</span><span>매출 <b>${won(k.g[i])}</b></span><span>평균 판매단가 <b>${k.q[i] ? n0(k.g[i] / k.q[i]) : '–'}</b></span>
-      <span>PPM <b class="${ppmD[j] < 0 ? 'neg' : ''}">${ppmD[j] == null ? '–' : ppmD[j].toFixed(1) + '%'}</b></span>
+      <span>PPM <b class="${ppmD[j] < 0 ? 'neg' : ''}">${ppmD[j] == null ? '–' : ppmD[j].toFixed(1) + '%'}</b></span><span>PMC <b>${won(k.pmc[i] || 0)}</b></span>
       <span>재고 <b>${k.inOps || k.st[i] ? n0(k.st[i]) : '–'}</b>${ctr ? ` <small>(${ctr})</small>` : ''}</span>
       ${k.inq[i] ? `<span>입고 <b>${n0(k.inq[i])}</b></span>` : ''}${k.so[i] ? pill({ c: '--crit' }, '품절') : ''}`;
   };
@@ -1508,7 +1508,7 @@ function renderPanel(k) {
     const pctB = (c, l) => l ? `<b class="${c < l ? 'down' : 'up'}">${c >= l ? '+' : ''}${((c - l) / l * 100).toFixed(0)}%</b>` : '–';
     const wts = [3, 2, 1], wq = last3.length === 3 ? (Q[lf] * 3 + Q[lf - 1] * 2 + Q[lf - 2]) / 6 : avg3;   // 월 판매량(가중): 최근 달 3 · 전달 2 · 전전달 1
     el.querySelector('.dp-sum').innerHTML = `<span class="sumgrp">최근 3개월 합 <b>${n0(s3)}</b> · ${ly3 ? `전년 같은 기간 <b>${n0(ly3)}</b> (${pctB(s3, ly3)})` : '전년 같은 기간 판매 없음'}</span>
-      <span class="sumgrp">3개월 평균 <b>${n0(avg3)}</b> · 최대 <b>${n0(max3)}</b> · 월 판매량(가중) <b>${n0(wq)}</b></span>
+      <span class="sumgrp">3개월 평균 <b>${n0(avg3)}</b> · 최대 <b>${n0(max3)}</b> · 월 판매량(가중) <b>${n0(wq)}</b>${hk.pmc ? ` · 최근 3개월 PMC <b>${won(sum(last3.map(i => hk.pmc[i] || 0)))}원</b>` : ''}</span>
       ${k.inOps ? `<br><span class="sumgrp">재고 <b>${n0(k.stock)}</b> · 재고일수 <b>${docTxt(k.doc)}</b>${k.pend ? ` · 입고 대기 <b>${n0(k.pend)}</b> (첫 입고 ${md(k.firstEta)}${k.lateN ? ', 지연 있음' : ''}) · 예상 소진 <b>${k.runout ? md(k.runout) : docTxt(k.doc)}</b> → 발주 반영 <b>${k.runoutPO ? md(k.runoutPO) : docTxt(k.docPO)}</b>` : ''}</span>` : ''}`;
     el.querySelector('h3').innerHTML = `${esc(k.name)} · 월별 판매 추이`;
     const mhb = i => {
@@ -1591,6 +1591,7 @@ function renderPanel(k) {
   const R = [
     ['판매량', i => n0(k.q[i])], ['매출(만원)', i => n0(k.g[i] / 1e4)], ['평균 판매단가', i => k.q[i] ? n0(k.g[i] / k.q[i]) : '–'],
     ['PPM', (i, j) => ppmD[j] == null ? '–' : `<span class="${ppmD[j] < 0 ? 'neg' : ''}">${ppmD[j].toFixed(1)}</span>`],
+    ['PMC', i => k.pmc[i] ? won(k.pmc[i]) : '·'],
     ['조회수', i => n0(k.v[i])], ['주문', i => n0(k.o[i])], ['반품', i => k.r[i] ? n0(Math.abs(k.r[i])) : '·'],
     ['재고', i => k.st[i] == null ? '–' : n0(k.st[i])], ['입고', i => k.inq[i] ? n0(k.inq[i]) : '·'],
     ['품절', i => k.so[i] ? '<i class="sw round" style="--c:var(--crit)"></i>' : '·']
